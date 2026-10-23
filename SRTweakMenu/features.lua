@@ -133,6 +133,15 @@ do
   end)
   if not ok then wml.log("visual failed to load: " .. tostring(err)) end
 end
+-- Things the game hands out: pickups, garage, quick save, unlocks, gang gear.
+do
+  local ok, err = pcall(function()
+    local ITEMS = require("items")
+    ITEMS.setup(F)
+    F.after_updates[#F.after_updates + 1] = ITEMS.after_update
+  end)
+  if not ok then wml.log("items failed to load: " .. tostring(err)) end
+end
 
 -- ---------------------------------------------------------------- updates
 

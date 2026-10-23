@@ -9,7 +9,7 @@ local L = {}
 -- after that row instead of at the end.
 local PLACE = {
   { page = "player_notoriety", after = "wanted_police", rows = { "wanted_brotherhood", "wanted_ronin", "wanted_samedi", "wanted_ultor" } },
-  { page = "settings_unlocks", rows = { "unlock_cribs" } },
+  { page = "settings_unlocks", after = "unlock_reward_clothing", rows = { "crib_ammo", "unlock_cribs" } },
   { page = "weapons_special", rows = { "super_explosions", "milk_bones" } },
   { page = "vehicles_toughness", rows = { "infinite_mass" } },
   { page = "vehicles_look", rows = { "sirens" } },
@@ -17,6 +17,7 @@ local PLACE = {
   { tab = "World", after = "low_gravity", rows = { "gravity", "game_speed" } },
   { page = "settings_unlocks", rows = { "reward_fireproof" } },
   { tab = "Vehicles", after = "spawn_vehicle", rows = { "vehicle_cheats" } },
+  { tab = "Vehicles", after = "garage", rows = { "garage_this" } },
   { page = "world_people", rows = { "ped_density", "traffic_density", "ped_war", "drunk", "evil_cars", "raining_peds", "super_saints", "bushwick" } },
   { tab = "World", after = "freeze_clock", rows = { "low_gravity" } },
   { page = "player_movement", after = "crouch_moving", rows = { "sprint_on_fire" } },
