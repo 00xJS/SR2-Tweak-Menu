@@ -292,11 +292,18 @@ static int l_script(lua_State *s) { return run_in(s, LUA_STATE_PTR); }
 static int l_vint(lua_State *s)   { return run_in(s, VINT_STATE_PTR); }
 
 // ------------------------------------------------------------------ game functions
+// Both calls keep the x87 state as it was: a game function that returns a
+// float leaves it on the FPU stack, and eight of those would overflow it.
+static uint8_t g_fpu[108];
+static void fpu_save(void) { __asm { fnsave g_fpu } __asm { frstor g_fpu } }
+static void fpu_restore(void) { __asm { frstor g_fpu } }
+
 typedef uint32_t (__cdecl *cdecl8)(uint32_t, uint32_t, uint32_t, uint32_t, uint32_t, uint32_t, uint32_t, uint32_t);
 static int call_guarded(uint32_t fn, const uint32_t *a, uint32_t *out)
 {
-    __try { *out = ((cdecl8)(uintptr_t)fn)(a[0], a[1], a[2], a[3], a[4], a[5], a[6], a[7]); return 1; }
-    __except (EXCEPTION_EXECUTE_HANDLER) { return 0; }
+    fpu_save();
+    __try { *out = ((cdecl8)(uintptr_t)fn)(a[0], a[1], a[2], a[3], a[4], a[5], a[6], a[7]); fpu_restore(); return 1; }
+    __except (EXCEPTION_EXECUTE_HANDLER) { fpu_restore(); return 0; }
 }
 // A cdecl call with up to 8 integer arguments (extra ones are harmless: the
 // caller cleans the stack).
@@ -343,8 +350,9 @@ static __declspec(naked) void callx_thunk(void)
 }
 static int callx_guarded(void)
 {
-    __try { callx_thunk(); return 1; }
-    __except (EXCEPTION_EXECUTE_HANDLER) { return 0; }
+    fpu_save();
+    __try { callx_thunk(); fpu_restore(); return 1; }
+    __except (EXCEPTION_EXECUTE_HANDLER) { fpu_restore(); return 0; }
 }
 static uint32_t reg_field(lua_State *s, const char *name)
 {

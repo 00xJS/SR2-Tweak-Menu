@@ -67,6 +67,9 @@ wml = {
 wr(0x00E94D3E, 1, 1); wr(0x00E8B210, 1, 0xFF); wr(0x021703D4, 4, 0x10000000); wr(0x10000000 + 0xD74, 4, 0x1234)
 wr(0x01F7A418, 4, 1)
 
+-- (any global the menu makes is reported: rows should keep to locals)
+local stray = {}
+setmetatable(_G, { __newindex = function(g, k, v) stray[#stray + 1] = tostring(k); rawset(g, k, v) end })
 dofile(root .. "/main.lua")
 local function frame(pressed)
   keys_prev = keys_now; keys_now = {}
@@ -128,5 +131,6 @@ for tab = 1, #F.categories do
   press("PAGEDOWN")
 end
 press("F5")
+for _, k in ipairs(stray) do problems[#problems + 1] = "global made: " .. k end
 for _, l in ipairs(logs) do if l:find("fail") or l:find("rror") then problems[#problems + 1] = "log: " .. l end end
 print(total .. " rows; " .. (#problems == 0 and "no errors" or ("PROBLEMS:\n  " .. table.concat(problems, "\n  "))))

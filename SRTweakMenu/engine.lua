@@ -10,7 +10,7 @@ local read_u8, read_u16, read_u32, read_f32 = wml.read_u8, wml.read_u16, wml.rea
 local write_u8, write_u32, write_f32 = wml.write_u8, wml.write_u32, wml.write_f32
 local E = {}
 
-local FRAME_TIME = 0x00E8437C   -- f32: the last frame's length in seconds
+local FRAME_TIME = 0x00E84384   -- f32: the last frame's length in seconds, before game speed
 
 -- Handle -> object pointer (nil if gone); kind at +0x4C: 1 human, 5 vehicle.
 local function object(h)
@@ -239,10 +239,6 @@ function E.respect_row()
     end }
 end
 
-function E.one_hit_row()
-  return not_yet("one_hit", "One-hit kill", "SR2's damage isn't reachable from the menu yet.")
-end
-
 -- Play as any character preset (live), and back.
 function E.play_as(name)
   local ch = wml.callx(NPC.CHAR, { ecx = wml.buffer(6, name) })
@@ -303,6 +299,41 @@ function E.drop_row()
       local list = humans()
       for _, o in ipairs(list) do wml.call(0x009AC180, o, 3000, 0, 0, 0, 0, 1, 0) end
       return "Down they go (" .. #list .. ")"
+    end }
+end
+
+-- Everybody...: every person around takes one of the game's animation
+-- states (looked up by name; 0x006EF510 gives -1 for one SR2 hasn't got),
+-- set with the same call No Clip uses on you. "Back to normal" clears it.
+local EVERYBODY = {
+  { { "breakdancer stand" }, "Breakdance" },
+  { { "pole stand", "stage stand" }, "Strip dance" },
+  { { "drunk stand" }, "Drunk" },
+  { { "cower stand", "cower stand variant 1" }, "Cower" },
+  { { "protest Stand" }, "Protest" },
+  { { "streaking stand" }, "Streak" },
+  { { "tour Stand" }, "Tourists" },
+  { false, "Back to normal" },
+}
+local function state_index(name)
+  local i = wml.call(0x006EF510, wml.buffer(4, name))
+  return i ~= 0xFFFFFFFF and i or nil
+end
+local function set_state(o, index)
+  local cell = wml.buffer(5); write_u32(cell, index)
+  wml.callx(0x009695F0, { ecx = o }, cell)
+end
+function E.everybody_row()
+  return { id = "everybody", label = "Everybody...", kind = "list", items = EVERYBODY, nosave = true,
+    help = "Left/Right to pick what people near you do, Enter to start. Back to normal stops it.",
+    run = function(ctx, p, v, it)
+      local choice = it.items[it.v]
+      local states = {}
+      for _, name in ipairs(choice[1] or {}) do states[#states + 1] = state_index(name) end
+      if choice[1] and #states == 0 then return "Saints Row 2 hasn't got that one" end
+      local list = humans()
+      for i, o in ipairs(list) do set_state(o, choice[1] and states[(i - 1) % #states + 1] or 0xFFFFFFFF) end
+      return choice[1] and string.format("Everybody: %s (%d people)", choice[2], #list) or "Everybody back to normal"
     end }
 end
 

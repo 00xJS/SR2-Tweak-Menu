@@ -20,11 +20,6 @@ return function(F, G)
   end
 
   F.category("Weapons", {
-    { id = "infinite_ammo", label = "Infinite ammo", kind = "toggle", cheat = "Ammo",
-      help = "Your ammo never runs out (the phone's cheat)." },
-    { id = "no_reload", label = "No reload", kind = "toggle", cheat = "Unlimited Clip",
-      help = "Your clip never empties (the phone's cheat)." },
-    ENGINE.one_hit_row(),
     { id = "super_explosions", label = "Super explosions", kind = "toggle", cheat = "Super Explosions",
       help = "Every explosion is bigger (the phone's cheat)." },
     { id = "milk_bones", label = "Pimp strength", kind = "toggle", cheat = "MILK BONES",

@@ -53,6 +53,7 @@ return function(F, G)
     ENGINE.crowd_big_row(),
     ENGINE.remove_people_row(),
     ENGINE.drop_row(),
+    ENGINE.everybody_row(),
 
     world_cheat("ped_war", "Ped War", "Everybody fights", "Pedestrians fight each other"),
     world_cheat("drunk", "Drunk", "Drunk pedestrians", "People stagger about drunk"),

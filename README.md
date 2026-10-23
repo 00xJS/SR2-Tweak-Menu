@@ -46,16 +46,20 @@ and size the menu text. The log is `TweakMenu\wml.log`.
 
 | Tab | |
 |---|---|
-| Player | **Health & damage** (god mode, no ragdoll, health multiplier, heal on D-pad down, refill health, kill yourself), **Movement** (No Clip, infinite sprint), **Notoriety** (never wanted, no cops, no gangs, never busted, max notoriety, each team's level: Police, Brotherhood, Ronin, Sons of Samedi, Ultor), **Bodyguards** (spawn a bodyguard, dismiss homies, more homies), **Unlocks**; +$50,000, +5,000 respect |
-| Weapons | Infinite ammo, no reload, perfect aim; **Special ammo** (super explosions, pimp strength); give any weapon, give every weapon, refill all ammo |
-| Vehicles | Vehicle god mode, repair; **Toughness** (tank mode, bulletproof glass and tires, no explosion fling, vehicle smash), **Handling** (top speed), **Look** (sirens); spawn any of 118 vehicles, the phone's vehicle cheats, remove spawned vehicles, destroy |
-| World | Weather, no fog, time of day, freeze time, low gravity, clear / restore streets; **People** (spawn any character, crowds of 10 and 40, remove spawned people, ragdoll all, crowd and traffic density, the phone's mayhem cheats) |
-| Visual | Hide HUD; **Camera** (field of view), **Free camera** (the game's slew camera); giant, tiny, pratfall, elevator to heaven |
+| Player | **Health & damage** (god mode, no ragdoll, drop your weapon when knocked down, health multiplier, fall damage, no health regen, refill health, kill yourself), **Movement** (No Clip, sprint length, infinite sprint, run boost, soft landing, crouch while moving, sprint while on fire), **Notoriety** (never wanted, no cops, no gangs, never busted, max notoriety, each team's level: Police, Brotherhood, Ronin, Sons of Samedi, Ultor), **Bodyguards** (spawn a bodyguard, dismiss homies, more homies), **Unlocks** (bulletproof, explosion-proof, crash-proof, fireproof, crib buying); +$50,000, +5,000 respect |
+| Weapons | Infinite ammo, no reload, rapid fire, one-hit kill, heavy knockback, perfect aim, no melee lock-on, reload in cars, reload while sprinting, switch weapons any time; **Special ammo** (rocket ammo, fire ammo, explosive melee, super explosions, pimp strength); give any weapon, give every weapon, refill all ammo |
+| Vehicles | Vehicle god mode, repair; **Toughness** (tank mode, bulletproof glass and tires, no explosion fling, vehicle smash), **Handling** (extra grip, nitrous everywhere, top speed, acceleration, no 100 mph limit), **Look** (sirens), **Driving camera** (free camera in cars, reset times, swing-back speed, follows the nose, free drive-by camera, field of view at top speed); spawn any of 118 vehicles, the phone's vehicle cheats, remove spawned vehicles, destroy |
+| World | Weather, no fog, time of day, freeze time, low gravity, gravity, game speed, clear / restore streets; **People** (spawn any character, crowds of 10 and 40, remove spawned people, everybody dance / pose, ragdoll all, kill everyone, crowd and traffic density, the phone's mayhem cheats), **Districts** (hand any district or the whole city to a gang, reveal the map) |
+| Visual | Hide HUD, map arrow shows where you face, no cutscene black bars, no screen blur, no vignette; **Camera** (field of view, turn speed, no climbing camera lock, no sprint shake), **Free camera** (the game's slew camera, freeze world); giant, tiny, pratfall, elevator to heaven |
 | Teleport | Districts, cribs, crib garages, every store chain, mission starts, strongholds; teleport to waypoint, auto-teleport to waypoint |
 | Models | Play as any character, live; restore your character |
 | Customize | SR2's character creator; **Movement** (walk, run and stand style) |
-| Emotes | **Poses** (the game's stand poses, held), **Actions** (taunts, gang signs, dances...), stop, repeat, D-pad taunts |
-| Settings | All tweaks, show active tweaks, save tweaks for next time, forget saved tweaks |
+| Emotes | **Poses** (the game's stand poses, held), **Actions** (taunts, gang signs, dances...), stop, repeat |
+| Settings | All tweaks, show active tweaks, save tweaks for next time, forget saved tweaks; **Game & saving** (skip intro, load last save, pause cutscenes, no tutorial popups) |
+
+Rows marked experimental in their help (run boost, rocket and fire ammo,
+explosive melee, extra grip, nitrous everywhere) rest on the game's code
+read, not yet on play.
 
 Phone cheats are switched through the game's own cheat code. Using one
 unlocks it on your phone and marks the save as cheated, as the phone does.
@@ -128,12 +132,17 @@ Juiced Patch's sources were used as a map. No Juiced code is used.
 
 ## Not on Saints Row 2 yet
 
-The rest of SR1's rows are left out until each has an SR2 way to work:
-weapon skins, districts, special ammo (rocket and fire ammo, money gun,
-explosive punches), rapid fire, one-hit kills, run boost and high jump,
-SR1's aiming add-ons (Precise Aim, Fine Aim, Weapon Switch, which are mods
-of their own), the driving camera, filters and render modes, staged scenes
-and voice lines, and SR1's start-up rows.
+- **SR1-only:** the SR1 gangs' notoriety and "Saints are enemies", SR1's
+  aiming add-ons (Precise Aim, Fine Aim, Weapon Switch: mods of their own),
+  weapon skins (SR1 texture work), the money gun, and Heal on D-pad down and
+  D-pad taunts (SR2 has its own healing and taunt buttons).
+- **No SR2 way found yet:** high jump and jump height, swim speed, quick
+  crouch, bouncy and less stiff cars, paint and car customization, deliver to
+  garage, brake lights when stopped, no camera swing getting in, money / cash
+  / weapon rain and cash drop chance, gangs without guns or in ordinary cars,
+  filters, saturation and render modes, letterbox, free camera modes, staged
+  scenes and voice lines, outfits, unlocks of music, collectibles and
+  clothing, the remaining rewards, and quick save.
 
 ## Credits
 

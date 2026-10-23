@@ -66,17 +66,5 @@ return function(F, G)
   rows[#rows + 1] = { id = "repeat_every", label = "Repeat interval (s)", kind = "value", default = 5, min = 1, max = 30, step = 1,
     fmt = F.fmtint, oneshot = true, needs = "none", help = "How often Repeat action plays it again." }
 
-  -- D-pad taunts: the game's three taunts on D-pad left / right (/ up).
-  local TAUNT_MODES = { "Off", "Left and right", "Left, right and up" }
-  rows[#rows + 1] = { id = "dpad_taunts", label = "D-pad taunts", kind = "value", default = 1, min = 1, max = #TAUNT_MODES, step = 1,
-    fmt = function(v) return TAUNT_MODES[v] or "?" end,
-    help = "Multiplayer's three taunts on foot: D-pad left and right (arrow keys), and up too if you like.",
-    update = function(ctx, p, v, it)
-      if v ~= 0 then return end
-      if F.dpad_hit("LEFT") then play("Taunt 1")
-      elseif F.dpad_hit("RIGHT") then play("Taunt 2")
-      elseif it.v == 3 and F.dpad_hit("UP") then play("Taunt 3") end
-    end }
-
   F.category("Emotes", rows)
 end

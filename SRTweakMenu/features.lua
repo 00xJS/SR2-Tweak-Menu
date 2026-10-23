@@ -85,19 +85,9 @@ function F.cheat_once(name)
   return msg
 end
 
--- The controller (XInput bits, as menu.lua's PAD) and D-pad helpers for
--- rows that act on a button: held, or pressed this update. The arrow keys
--- count as the D-pad, as in SR1. Nothing reaches rows while the menu is open.
+-- The controller (XInput bits, as menu.lua's PAD), this update and the last
+-- (main.lua keeps them), for rows that act on a button.
 F.pad, F.pad_prev = 0, 0
-local DPAD = { UP = 0x1, DOWN = 0x2, LEFT = 0x4, RIGHT = 0x8 }
-function F.dpad_down(name)
-  if F.menu_open() then return false end
-  return (F.pad & DPAD[name]) ~= 0 or wml.key_down(name)
-end
-function F.dpad_hit(name)
-  if F.menu_open() then return false end
-  return ((F.pad & DPAD[name]) ~= 0 and (F.pad_prev & DPAD[name]) == 0) or wml.key_pressed(name)
-end
 
 -- A page row (SR1's kind "page"): Enter opens `rows` on a page of its own.
 -- The rows are registered, so their toggles apply like any other.
@@ -128,6 +118,11 @@ do
     F.after_update = QOL.after_update
   end)
   if not ok then wml.log("qol failed to load: " .. tostring(err)) end
+end
+-- Rows that change the game's memory (health, the gun in your hand, vehicles, districts...).
+do
+  local ok, err = pcall(function() require("gameplay").setup(F) end)
+  if not ok then wml.log("gameplay failed to load: " .. tostring(err)) end
 end
 
 -- ---------------------------------------------------------------- updates
