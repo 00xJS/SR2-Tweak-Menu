@@ -142,6 +142,15 @@ do
   end)
   if not ok then wml.log("items failed to load: " .. tostring(err)) end
 end
+-- Jumping, swimming, how cars ride, paint.
+do
+  local ok, err = pcall(function()
+    local PHYS = require("physics")
+    PHYS.setup(F)
+    F.after_updates[#F.after_updates + 1] = PHYS.after_update
+  end)
+  if not ok then wml.log("physics failed to load: " .. tostring(err)) end
+end
 
 -- ---------------------------------------------------------------- updates
 

@@ -46,20 +46,21 @@ and size the menu text. The log is `TweakMenu\wml.log`.
 
 | Tab | |
 |---|---|
-| Player | **Health & damage** (god mode, no ragdoll, drop your weapon when knocked down, health multiplier, fall damage, no health regen, refill health, kill yourself), **Movement** (No Clip, sprint length, infinite sprint, run boost, soft landing, crouch while moving, sprint while on fire), **Notoriety** (never wanted, no cops, no gangs, never busted, max notoriety, each team's level: Police, Brotherhood, Ronin, Sons of Samedi, Ultor), **Bodyguards** (spawn a bodyguard, dismiss homies, more homies), **Unlocks** (bulletproof, explosion-proof, crash-proof, fireproof, crib buying); +$50,000, +5,000 respect |
-| Weapons | Infinite ammo, no reload, rapid fire, one-hit kill, heavy knockback, perfect aim, no melee lock-on, reload in cars, reload while sprinting, switch weapons any time; **Special ammo** (rocket ammo, fire ammo, explosive melee, super explosions, pimp strength); give any weapon, give every weapon, refill all ammo |
-| Vehicles | Vehicle god mode, repair; **Toughness** (tank mode, bulletproof glass and tires, no explosion fling, vehicle smash), **Handling** (extra grip, nitrous everywhere, top speed, acceleration, no 100 mph limit), **Look** (sirens), **Driving camera** (free camera in cars, reset times, swing-back speed, follows the nose, free drive-by camera, field of view at top speed); spawn any of 118 vehicles, the phone's vehicle cheats, remove spawned vehicles, destroy |
-| World | Weather, no fog, time of day, freeze time, low gravity, gravity, game speed, clear / restore streets; **People** (spawn any character, crowds of 10 and 40, remove spawned people, everybody dance / pose, ragdoll all, kill everyone, crowd and traffic density, the phone's mayhem cheats), **Districts** (hand any district or the whole city to a gang, reveal the map) |
-| Visual | Hide HUD, map arrow shows where you face, no cutscene black bars, no screen blur, no vignette; **Camera** (field of view, turn speed, no climbing camera lock, no sprint shake), **Free camera** (the game's slew camera, freeze world); giant, tiny, pratfall, elevator to heaven |
+| Player | **Health & damage** (god mode, no ragdoll, drop your weapon when knocked down, health multiplier, fall damage, no health regen, refill health, kill yourself), **Movement** (No Clip, sprint length, infinite sprint, run boost, high jump and its boost, game jump height, soft landing, crouch while moving, sprint while on fire, swim speed), **Notoriety** (never wanted, no cops, no gangs, never busted, max notoriety, each team's level: Police, Brotherhood, Ronin, Sons of Samedi, Ultor), **Bodyguards** (spawn a bodyguard, dismiss homies, more homies), **Unlocks** (all music, the CD rewards, all clothing, reward outfits, unlimited crib ammo, crib buying; free shopping, bulletproof, explosion-proof, crash-proof, fireproof, police / gangs forget fast); +$50,000, +5,000 respect |
+| Weapons | Infinite ammo, no reload, rapid fire, one-hit kill, heavy knockback, perfect aim, no melee lock-on, reload in cars, reload while sprinting, switch weapons any time; **Special ammo** (rocket ammo, fire ammo, money gun and its bill, explosive melee and its blast, super explosions, pimp strength); give any weapon, give every weapon, refill all ammo |
+| Vehicles | Vehicle god mode, repair; **Toughness** (tank mode, bulletproof glass and tires, no explosion fling, vehicle smash), **Handling** (extra grip, nitrous everywhere, top speed, acceleration, no 100 mph limit, bouncy cars, less stiff cars), **Look** (customize vehicle at Rim Jobs, paint and secondary colour from all 548 of the game's colours, sirens), **Driving camera** (free camera in cars, reset times, swing-back speed, follows the nose, free drive-by camera, no camera swing getting in, field of view at top speed); spawn any of 118 vehicles, the phone's vehicle cheats, remove spawned vehicles, deliver to garage, store this car in the garage, destroy |
+| World | Weather, no fog, time of day, freeze time, low gravity, gravity, game speed, clear / restore streets; **People** (spawn any character, crowds of 10 and 40, remove spawned people, everybody dance / pose, ragdoll all, kill everyone, gangs drive ordinary cars, gangs and police without guns, crowd and traffic density, the phone's mayhem cheats), **Drops** (cash around you, money rain, weapons around you, cash drop chance), **Districts** (hand any district or the whole city to a gang, reveal the map) |
+| Visual | Hide HUD, map arrow shows where you face, letterbox, filter, render mode, saturation, no cutscene black bars, no screen blur, no vignette; **Camera** (field of view, turn speed, no climbing camera lock, no sprint shake), **Free camera** (fly it or hold the shot, freeze world); giant, tiny, pratfall, elevator to heaven |
 | Teleport | Districts, cribs, crib garages, every store chain, mission starts, strongholds; teleport to waypoint, auto-teleport to waypoint |
 | Models | Play as any character, live; restore your character |
-| Customize | SR2's character creator; **Movement** (walk, run and stand style) |
-| Emotes | **Poses** (the game's stand poses, held), **Actions** (taunts, gang signs, dances...), stop, repeat |
-| Settings | All tweaks, show active tweaks, save tweaks for next time, forget saved tweaks; **Game & saving** (skip intro, load last save, pause cutscenes, no tutorial popups) |
+| Customize | SR2's character creator, restore outfit, customization pose; **Movement** (walk, run and stand style) |
+| Emotes | **Poses** (the game's stand poses, held), **Actions** (taunts, gang signs, dances...), **Voice Lines** (taunts, compliments, shouts), stage a scene, clear scene, stop, repeat |
+| Settings | All tweaks, show active tweaks, save tweaks for next time, forget saved tweaks; **Game & saving** (skip intro, load last save, quick save, pause cutscenes, no tutorial popups) |
 
 Rows marked experimental in their help (run boost, rocket and fire ammo,
-explosive melee, extra grip, nitrous everywhere) rest on the game's code
-read, not yet on play.
+explosive melee, the money gun, extra grip, nitrous everywhere, bouncy and
+less stiff cars, staged scenes) rest on the game's code read, not yet on
+play.
 
 Phone cheats are switched through the game's own cheat code. Using one
 unlocks it on your phone and marks the save as cheated, as the phone does.
@@ -130,19 +131,21 @@ Juiced Patch's sources were used as a map. No Juiced code is used.
 - **Data.** `tools\vpp2.py` lists and extracts SR2's packfiles (the `data`
   lists were built from them).
 
-## Not on Saints Row 2 yet
+## Not on Saints Row 2
 
-- **SR1-only:** the SR1 gangs' notoriety and "Saints are enemies", SR1's
-  aiming add-ons (Precise Aim, Fine Aim, Weapon Switch: mods of their own),
-  weapon skins (SR1 texture work), the money gun, and Heal on D-pad down and
-  D-pad taunts (SR2 has its own healing and taunt buttons).
-- **No SR2 way found yet:** high jump and jump height, swim speed, quick
-  crouch, bouncy and less stiff cars, paint and car customization, deliver to
-  garage, brake lights when stopped, no camera swing getting in, money / cash
-  / weapon rain and cash drop chance, gangs without guns or in ordinary cars,
-  filters, saturation and render modes, letterbox, free camera modes, staged
-  scenes and voice lines, outfits, unlocks of music, collectibles and
-  clothing, the remaining rewards, and quick save.
+- **SR1's own:** the SR1 gangs' notoriety, "Saints are enemies" and the gang
+  you side with (SR2 has its own gangs' rows), SR1's aiming add-ons (Precise
+  Aim, Fine Aim, Weapon Switch: mods of their own), weapon skins (SR1's
+  texture work), animation fallback and cloth physics (SR1 model swaps), and
+  Heal on D-pad down and D-pad taunts (SR2 has its own healing and taunt
+  buttons).
+- **No SR2 way:** quick crouch (the crouch is an animation with no speed
+  value), brake lights when stopped (the brake is also reverse), multiplayer
+  clothing, and stores open 24/7 (SR2's stores don't close).
+- **Partly:** Unlock all collectibles gives what the 60 CDs unlock, not the
+  CDs themselves (each CD's identity only exists while its part of the map is
+  loaded); the money gun throws bills the way you aim (SR2 keeps no "where the
+  bullet hit"); Customize Vehicle takes you to the nearest Rim Jobs.
 
 ## Credits
 
