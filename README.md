@@ -1,22 +1,19 @@
-# SR Tweak Menu for Saints Row 2 (prototype)
+# SR Tweak Menu for Saints Row 2
 
 [SR Tweak Menu](https://github.com/00xJS/SR-Tweak-Menu), the in-game cheat
 menu for Saints Reborn (Saints Row 1), running in **Saints Row 2 on PC**.
 
-This is a proof of concept. Its host runs the menu's own `menu.lua`,
-unchanged, inside SR2. Only three rows are ported so far:
+It's the same menu: SR Tweak Menu 2.5.0's `menu.lua` and `layout.lua` run
+here unchanged, so the tabs, pages, row order, keys and look match SR1. The
+rows underneath are SR2's own, built on the game's mission-script functions,
+its phone cheats and its engine.
 
-| Tab | Rows |
-|---|---|
-| Player | God mode, Money +$50,000 |
-| Teleport | Teleport to waypoint |
-| Settings | All tweaks, Show active tweaks |
+Work in progress: some SR1 rows have no SR2 version yet (see the end).
 
 ## Requirements
 
-- Saints Row 2 on PC, the Steam or GOG version, with
-  [Juiced Patch](https://www.kobraworks.com/juiced) installed (tested with
-  v9.3.1). It also runs without Juiced, but that's untested.
+- Saints Row 2 on PC, the Steam or GOG version. Juiced Patch is optional:
+  the menu runs with it or without it.
 - To build it: Visual Studio 2022 with **Desktop development with C++**.
 
 ## Build and install
@@ -29,95 +26,119 @@ install.bat
 `install.bat` takes the game folder as an argument if Saints Row 2 isn't in
 Steam's default folder. It puts:
 
-- `dinput8.dll` next to `SR2_pc.exe`. This is the host, described below.
-- the menu's files in `TweakMenu\SRTweakMenu\`. An existing `mod.ini` is kept.
+- `dinput8.dll` (the host) next to `SR2_pc.exe`.
+- the menu in `TweakMenu\SRTweakMenu\`. An existing `mod.ini` is kept.
 
-To uninstall, delete `dinput8.dll` and the `TweakMenu` folder from the game folder.
+To uninstall, delete `dinput8.dll` and the `TweakMenu` folder.
 
 ## Controls
 
-The same as SR1's menu: **F5** opens it, **Up/Down** move, **Left/Right**
-adjust, **Enter** selects, **PgUp/PgDn** change tab, **Backspace** goes back
-or closes. On a controller, hold **RB** and press **D-pad Down**. While the
-menu is open the game doesn't see the arrows, Enter or Backspace. It still
-sees the controller (see Limits).
+As in SR1: **F5** opens the menu, **Up/Down** move, **Left/Right** adjust or
+browse a list, **Enter** selects or opens a page, **PgUp/PgDn** change tab,
+**Backspace** goes back or closes. On a controller, hold **RB** and press
+**D-pad Down**. The game doesn't see the arrows, Enter or Backspace while the
+menu is open. It still sees the controller.
 
-Settings are in `TweakMenu\SRTweakMenu\mod.ini`. The `overlay_*` keys move
-the menu text and change its size. The log is `TweakMenu\wml.log`.
+Settings are in `TweakMenu\SRTweakMenu\mod.ini`; the `overlay_*` keys move
+and size the menu text. The log is `TweakMenu\wml.log`.
+
+## What's in it
+
+| Tab | |
+|---|---|
+| Player | **Health & damage** (god mode, no ragdoll, health multiplier, heal on D-pad down, refill health, kill yourself), **Movement** (No Clip, infinite sprint), **Notoriety** (never wanted, no cops, no gangs, never busted, max notoriety, each team's level: Police, Brotherhood, Ronin, Sons of Samedi, Ultor), **Bodyguards** (spawn a bodyguard, dismiss homies, more homies), **Unlocks**; +$50,000, +5,000 respect |
+| Weapons | Infinite ammo, no reload, perfect aim; **Special ammo** (super explosions, pimp strength); give any weapon, give every weapon, refill all ammo |
+| Vehicles | Vehicle god mode, repair; **Toughness** (tank mode, bulletproof glass and tires, no explosion fling, vehicle smash), **Handling** (top speed), **Look** (sirens); spawn any of 118 vehicles, the phone's vehicle cheats, remove spawned vehicles, destroy |
+| World | Weather, no fog, time of day, freeze time, low gravity, clear / restore streets; **People** (spawn any character, crowds of 10 and 40, remove spawned people, ragdoll all, crowd and traffic density, the phone's mayhem cheats) |
+| Visual | Hide HUD; **Camera** (field of view), **Free camera** (the game's slew camera); giant, tiny, pratfall, elevator to heaven |
+| Teleport | Districts, cribs, crib garages, every store chain, mission starts, strongholds; teleport to waypoint, auto-teleport to waypoint |
+| Models | Play as any character, live; restore your character |
+| Customize | SR2's character creator; **Movement** (walk, run and stand style) |
+| Emotes | **Poses** (the game's stand poses, held), **Actions** (taunts, gang signs, dances...), stop, repeat, D-pad taunts |
+| Settings | All tweaks, show active tweaks, save tweaks for next time, forget saved tweaks |
+
+Phone cheats are switched through the game's own cheat code. Using one
+unlocks it on your phone and marks the save as cheated, as the phone does.
 
 ## How it works
 
 **The host (`host/host.c`, built as `dinput8.dll`)**
 
 - **Loading.** SR2 imports one function from `dinput8.dll`, so Windows loads
-  the host from the game folder. The host passes `DirectInput8Create` on to
-  the real DLL in System32 and wraps the keyboard device, so the menu can
-  keep keys from the game.
-- **Lua.** It embeds Lua 5.4 and gives it a `wml` table shaped like
-  Whompay's Mod Loader's. The SR1 menu's files only use that table.
-- **Frame hook.** Lua runs every frame on the game's main thread, from the
-  call at `0x0052050C`.
-- **Drawing.** The menu text is drawn with the game's own text printer from
-  the 2D call at `0x00521A69`. SR1's `menu.lua` writes its text to a
-  "mailbox" for SR1's `menu_overlay.dll`. The host emulates that mailbox and
-  draws its text.
-- **Living with Juiced.** Juiced Patch hooks the same two calls. The host
-  waits until Juiced has hooked them, then installs its own hooks and passes
-  on to Juiced's. Its thunks keep every register and flag, so neither side
-  notices.
+  the host from the game folder. It passes `DirectInput8Create` on to the
+  real DLL and wraps the keyboard, so the menu can keep keys from the game.
+- **Lua.** Lua 5.4 with a `wml` table shaped like Whompay's Mod Loader's,
+  which is all the SR1 menu's files use.
+- **Hooks.** Lua runs every frame on the game's main thread from the call at
+  `0x0052050C`; the menu is drawn with the game's text printer from the 2D
+  call at `0x00521A69`. With Juiced installed the host waits for Juiced's
+  hooks on those calls and chains to them; without it, it hooks the game
+  directly.
+- **The menu's text.** SR1's `menu.lua` writes its text to a "mailbox" for
+  SR1's `menu_overlay.dll`; the host emulates that mailbox and draws it.
 
 **Extra `wml` calls for SR2**
 
 | Call | What it does |
 |---|---|
-| `wml.script(code)` | Runs a line of the game's own Lua 5.0, the mission scripts' state, with their functions such as `cash_add` and `turn_invulnerable` |
-| `wml.call(addr, ...)` | Calls a cdecl game function with up to 8 integer arguments |
-| `wml.pad()` | Reads controller 1 |
-| `wml.f2u` / `wml.u2f` | Convert a float to its bits and back |
+| `wml.script(code)` / `wml.vint(code)` | Runs Lua in the game's mission-script state / interface state. Returns whether it ran, then whatever the code passed to `tweak_out(...)` |
+| `wml.call(addr, ...)` | A cdecl game function with up to 8 integer arguments |
+| `wml.callx(addr, regs, ...)` | A game function taking arguments in registers (`{ eax =, ecx =, ... }`) and up to 8 on the stack |
+| `wml.patch(addr, bytes)` | Writes into the game's code |
+| `wml.buffer(slot, text)` | The address of a scratch buffer, for passing strings and structs |
+| `wml.read_string(addr)` | A zero-terminated string from the game |
+| `wml.pad()` | Controller 1's buttons and triggers |
+| `wml.f2u` / `wml.u2f` | A float to its bits and back |
 
-`wml.hook` isn't available yet.
+The game guards its Lua globals: new names can't be made with a plain
+assignment. The host adds `tweak_out` with a raw table set, and the menu
+keeps its own values in a `TWEAK` table made with `rawset`.
 
 **The menu files (`SRTweakMenu/`)**
 
 | File | What it is |
 |---|---|
-| `menu.lua` | SR1's, byte for byte |
-| `features.lua` | SR1's row engine (toggle, value, choice, list, action) with SR2 rows |
+| `menu.lua`, `layout.lua` | SR Tweak Menu 2.5.0's, byte for byte |
+| `layout_sr2.lua` | Puts the SR2-only rows into the pages that fit them; leaves out SR1 pages SR2 has nothing for |
+| `features.lua` | SR1's row engine (toggle, value, choice, list, action, page), phone cheats, saved tweaks |
+| `tab_*.lua` | Each tab's rows, under SR1's row ids |
+| `engine.lua` | Rows that call the game engine: No Clip, spawning, free camera, field of view, fog, respect, play as |
 | `game.lua` | SR2's addresses and calls |
+| `data/*.lua` | Lists built from the game's own tables: weapons, vehicles, characters, cheats, places, emotes, poses and movement styles |
 | `gameui.lua` | A stub: the game look isn't on SR2 yet, so only the plain text look works |
 | `main.lua` | Drives it all every frame |
 
-Game facts (addresses, what the game's functions take) were found in the
-game and cross-checked against Juiced Patch's sources. No Juiced code is
-used.
+Game facts (addresses, calling conventions) were read in the game's code;
+Juiced Patch's sources were used as a map. No Juiced code is used.
 
 ## Testing
 
 - **Offline.** `tools\build_lua_exe.bat`, then `build\lua.exe
-  tools\offline_test.lua` runs the menu against fake memory and prints what
-  would be drawn.
-- **In game.** Set `selftest = true` in the installed `mod.ini`. Once a game
-  is loaded, every row runs without keys and the results go to `wml.log`.
-  The self-test changes your game: it adds $50,000 and moves you 3 m.
+  tools\offline_test.lua` opens every tab and page against fake game memory,
+  presses every row and reports each row's game calls and any errors.
+- **Live probe.** Set `dev_probe = true` in the installed `mod.ini`. While the
+  game runs, anything written to `TweakMenu\probe_in.lua` is run in the
+  menu's Lua (with `G`, `F` and `MENU` at hand), and what it prints goes to
+  `TweakMenu\probe_out.txt`.
+- **Self-test.** `selftest = true` runs god mode, money and a teleport once a
+  game is loaded and logs the results. It changes your game: +$50,000 and a
+  3 m step.
+- **Data.** `tools\vpp2.py` lists and extracts SR2's packfiles (the `data`
+  lists were built from them).
 
-## Limits
+## Not on Saints Row 2 yet
 
-- **The controller still reaches the game** while the menu is open. Only the
-  keyboard's menu keys are kept from it.
-- **SR1 rows need porting one by one.** Most of SR1's `features.lua` reads
-  SR1 addresses or calls SR1 functions. In SR2, many of those features can use
-  the game's own script functions instead.
-- **Saves aren't marked as cheated**, unlike Juiced's Lua console.
-- **Private play only**, like the SR1 menu.
+The rest of SR1's rows are left out until each has an SR2 way to work:
+weapon skins, districts, special ammo (rocket and fire ammo, money gun,
+explosive punches), rapid fire, one-hit kills, run boost and high jump,
+SR1's aiming add-ons (Precise Aim, Fine Aim, Weapon Switch, which are mods
+of their own), the driving camera, filters and render modes, staged scenes
+and voice lines, and SR1's start-up rows.
 
 ## Credits
 
-SR Tweak Menu by 00xJS and itsMJQ. The menu (`menu.lua`) and the row engine
-come from it unchanged.
-
-Saints Row 2 Juiced Patch by Kobraworks Modding was used as a reference for
-addresses.
-
-Lua 5.4.9 by PUC-Rio, MIT licensed (`third_party/lua-5.4.9`).
+SR Tweak Menu by 00xJS and itsMJQ; its menu, layout and row engine are used
+as they are. Saints Row 2 Juiced Patch by Kobraworks Modding was the map to
+SR2's engine. Lua 5.4.9 by PUC-Rio, MIT licensed (`third_party/lua-5.4.9`).
 
 MIT licensed, see `LICENSE`.

@@ -27,8 +27,16 @@ local function wr(a, n, v)
   end
   for i = 0, n - 1 do mem[a + i] = v & 0xFF; v = v >> 8 end
 end
+-- (mod.ini and saved tweaks are written to a scratch copy, not the repo's)
+local scratch = (os.getenv("TEMP") or ".") .. "\\sr2_tweak_menu_test"
+os.execute('mkdir "' .. scratch .. '" 2>nul')
+do
+  local src = io.open(root .. "/mod.ini", "rb"); local data = src:read("a"); src:close()
+  local dst = io.open(scratch .. "\\mod.ini", "wb"); dst:write(data); dst:close()
+  os.remove(scratch .. "\\saved_tweaks.txt")
+end
 wml = {
-  mod_folder = root, mod_name = "test", game = "sr2",
+  mod_folder = scratch, mod_name = "test", game = "sr2",
   log = function(...) local t = table.concat({ ... }, " ") logs[#logs + 1] = t if verbose then print("[log]", t) end end,
   setting = function(_, d) return d end,
   read_u8 = function(a) return rd(a, 1) end, read_u16 = function(a) return rd(a, 2) end,
@@ -79,15 +87,13 @@ frame()
 press("F5")
 local problems = {}
 local total = 0
-for tab = 1, #F.categories do
-  local cat = F.categories[tab]
-  if verbose then print("==== " .. cat.name .. "\n" .. screen()) end
-  local rows = MENU.rows(MENU.tab)
-  print(string.format("%s (%d rows)", cat.name, #rows))
+-- Presses every row on the current page (or tab); opens pages and does
+-- their rows too, then comes back.
+local function sweep(where, depth)
   local seen = {}
   while true do
     local it = MENU.current()
-    if seen[it] then break end
+    if not it or seen[it] then break end
     seen[it] = true
     total = total + 1
     local before = #calls
@@ -97,11 +103,28 @@ for tab = 1, #F.categories do
     elseif it.kind == "action" then press("ENTER") end
     local made = {}
     for i = before + 1, #calls do made[#made + 1] = calls[i] end
-    print(string.format("  %-7s %-28s %s", it.kind, it.label:sub(1, 28), made[1] or ""))
-    for i = 2, math.min(#made, 3) do print(string.rep(" ", 39) .. made[i]) end
-    if (MENU.status or ""):find("Error") then problems[#problems + 1] = cat.name .. " / " .. it.label .. ": " .. MENU.status end
+    print(string.format("%s%-7s %-28s %s", string.rep("  ", depth), it.kind, it.label:sub(1, 28), made[1] or ""))
+    for i = 2, math.min(#made, 2) do print(string.rep(" ", 37 + depth * 2) .. made[i]) end
+    if (MENU.status or ""):find("Error") then problems[#problems + 1] = where .. " / " .. it.label .. ": " .. MENU.status end
+    if it.kind == "page" and depth < 3 then
+      local pages = #MENU.pages
+      press("ENTER")
+      if #MENU.pages > pages then
+        sweep(where .. " > " .. it.label, depth + 1)
+        press("BACKSPACE")
+      else
+        problems[#problems + 1] = where .. " / " .. it.label .. ": page didn't open (" .. tostring(MENU.status) .. ")"
+      end
+    end
     press("DOWN")
   end
+end
+
+for tab = 1, #F.categories do
+  local cat = F.categories[tab]
+  if verbose then print("==== " .. cat.name .. "\n" .. screen()) end
+  print(cat.name)
+  sweep(cat.name, 1)
   press("PAGEDOWN")
 end
 press("F5")

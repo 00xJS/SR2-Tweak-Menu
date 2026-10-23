@@ -12,6 +12,8 @@ if exist "%GAME%\dinput8.dll" fc /b "%GAME%\dinput8.dll" "%HERE%build\dinput8.dl
 copy /y "%HERE%build\dinput8.dll" "%GAME%\dinput8.dll" >nul || goto :copy_failed
 if not exist "%GAME%\TweakMenu\SRTweakMenu" mkdir "%GAME%\TweakMenu\SRTweakMenu"
 copy /y "%HERE%SRTweakMenu\*.lua" "%GAME%\TweakMenu\SRTweakMenu\" >nul || goto :copy_failed
+if not exist "%GAME%\TweakMenu\SRTweakMenu\data" mkdir "%GAME%\TweakMenu\SRTweakMenu\data"
+copy /y "%HERE%SRTweakMenu\data\*.lua" "%GAME%\TweakMenu\SRTweakMenu\data\" >nul || goto :copy_failed
 if not exist "%GAME%\TweakMenu\SRTweakMenu\mod.ini" copy "%HERE%SRTweakMenu\mod.ini" "%GAME%\TweakMenu\SRTweakMenu\" >nul
 echo Installed. Start Saints Row 2 and press F5 in game.
 exit /b 0

@@ -85,6 +85,20 @@ function F.cheat_once(name)
   return msg
 end
 
+-- The controller (XInput bits, as menu.lua's PAD) and D-pad helpers for
+-- rows that act on a button: held, or pressed this update. The arrow keys
+-- count as the D-pad, as in SR1. Nothing reaches rows while the menu is open.
+F.pad, F.pad_prev = 0, 0
+local DPAD = { UP = 0x1, DOWN = 0x2, LEFT = 0x4, RIGHT = 0x8 }
+function F.dpad_down(name)
+  if F.menu_open() then return false end
+  return (F.pad & DPAD[name]) ~= 0 or wml.key_down(name)
+end
+function F.dpad_hit(name)
+  if F.menu_open() then return false end
+  return ((F.pad & DPAD[name]) ~= 0 and (F.pad_prev & DPAD[name]) == 0) or wml.key_pressed(name)
+end
+
 -- A page row (SR1's kind "page"): Enter opens `rows` on a page of its own.
 -- The rows are registered, so their toggles apply like any other.
 function F.page(id, label, help, rows)
@@ -105,6 +119,15 @@ require("engine").attach(F)
 for _, tab in ipairs({ "player", "models", "emotes", "weapons", "vehicles", "world", "visual", "teleport", "settings" }) do
   local ok, err = pcall(function() require("tab_" .. tab)(F, G) end)
   if not ok then wml.log("tab " .. tab .. " failed to load: " .. tostring(err)) end
+end
+-- The quality-of-life rows (SR1's juiced.lua rows), into the tabs above.
+do
+  local ok, err = pcall(function()
+    local QOL = require("qol")
+    QOL.setup(F)
+    F.after_update = QOL.after_update
+  end)
+  if not ok then wml.log("qol failed to load: " .. tostring(err)) end
 end
 
 -- ---------------------------------------------------------------- updates
@@ -261,6 +284,32 @@ function F.status_line()
   end
   table.sort(parts)
   return (F.enabled and "On: " or "Tweaks OFF. Would be on: ") .. (#parts > 0 and table.concat(parts, ", ") or "nothing")
+end
+
+-- ---------------------------------------------------------------- mod.ini
+-- Rows that act while the game starts (skip intro, load last save) keep
+-- their value in mod.ini at once: `name = value` replaced, or added under
+-- [settings].
+F.INI = wml.mod_folder .. "\\mod.ini"
+function F.save_setting(name, value)
+  local f = io.open(F.INI, "r")
+  if not f then return end
+  local lines, found = {}, false
+  for line in f:lines() do
+    if line:match("^%s*" .. name .. "%s*=") then line = name .. " = " .. tostring(value); found = true end
+    lines[#lines + 1] = line
+  end
+  f:close()
+  if not found then
+    for i, line in ipairs(lines) do
+      if line:match("^%[settings%]") then table.insert(lines, i + 1, name .. " = " .. tostring(value)); found = true break end
+    end
+  end
+  if not found then return end
+  f = io.open(F.INI, "w")
+  if not f then return end
+  f:write(table.concat(lines, "\n"), "\n")
+  f:close()
 end
 
 -- ---------------------------------------------------------------- saved tweaks

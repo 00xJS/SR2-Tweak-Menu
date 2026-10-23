@@ -39,6 +39,13 @@ return function(F, G)
       off = function() G.lua("if T.base_hp then set_max_hit_points(LOCAL_PLAYER, T.base_hp) end") end },
     { id = "heal", label = "Refill health", kind = "action", help = "Fills your health.",
       run = function() G.lua("set_current_hit_points(LOCAL_PLAYER, get_max_hit_points(LOCAL_PLAYER))") return "Health refilled" end },
+    { id = "dpad_heal", label = "Heal on D-pad down", kind = "toggle", needs = "player",
+      help = "Multiplayer's heal in single player: hold D-pad down (arrow down) on foot to heal over 8 seconds.",
+      update = function(ctx, p, v)
+        if v ~= 0 or F.tick % 6 ~= 0 or not F.dpad_down("DOWN") then return end
+        G.lua("local m = get_max_hit_points(LOCAL_PLAYER) local h = get_current_hit_points(LOCAL_PLAYER) + m * 6 / 480 "
+          .. "if h > m then h = m end set_current_hit_points(LOCAL_PLAYER, h)")
+      end },
     { id = "kill_self", label = "Kill Yourself", kind = "action", help = "You die (and wake up at the hospital).",
       run = function() G.lua("character_kill(LOCAL_PLAYER)") return "Bye" end },
 

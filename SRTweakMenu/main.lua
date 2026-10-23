@@ -41,6 +41,7 @@ wml.on_frame(function()
   if PROBE then PROBE.frame(PROBE_ENV) end
   tick = tick + 1
   local buttons, lt, rt = wml.pad()
+  F.pad_prev, F.pad = F.pad or 0, buttons or 0
   if buttons then MENU.controller(buttons, lt, rt) end
   MENU.input(nil, tick)
   F.set_menu_open(MENU.is_open())

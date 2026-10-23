@@ -839,6 +839,43 @@ HRESULT WINAPI proxy_DirectInput8Create(HINSTANCE inst, DWORD version, REFIID ri
 
 // ------------------------------------------------------------------ entry
 static int ini_int(const char *key, int def) { return (int)GetPrivateProfileIntA("settings", key, def, g_ini); }
+static int ini_bool(const char *key)
+{
+    char v[16];
+    GetPrivateProfileStringA("settings", key, "", v, sizeof v, g_ini);
+    return !_stricmp(v, "true") || !strcmp(v, "1") || !_stricmp(v, "yes");
+}
+static void patch_code(uint32_t at, const void *bytes, size_t n)
+{
+    DWORD old;
+    if (!VirtualProtect((void *)(uintptr_t)at, n, PAGE_EXECUTE_READWRITE, &old)) return;
+    memcpy((void *)(uintptr_t)at, bytes, n);
+    VirtualProtect((void *)(uintptr_t)at, n, old, &old);
+    FlushInstructionCache(GetCurrentProcess(), (void *)(uintptr_t)at, n);
+}
+
+// Settings that act before the menu's Lua starts (it starts on the first
+// frame): mod.ini skip_intro and higher_max_speed.
+static void start_up_patches(void)
+{
+    if (ini_bool("skip_intro")) {
+        // The boot code waits on 0x00F9F46E while the logo movies play: don't
+        // set it. And the legal-screen state machine's first state jumps
+        // straight to its last.
+        static const uint8_t nops[6] = { 0x90, 0x90, 0x90, 0x90, 0x90, 0x90 };
+        static const uint32_t last_state = 0x0068C596;
+        patch_code(0x005207B4, nops, 6);
+        patch_code(0x0068C740, &last_state, 4);
+        logf("skip intro: on");
+    }
+    if (ini_bool("higher_max_speed")) {
+        // vehicles.xtbl's top speeds aren't capped at 100 mph as they load.
+        static const uint8_t nop2[2] = { 0x90, 0x90 };
+        patch_code(0x00AEB541, nop2, 2);
+        patch_code(0x00AEB5A2, nop2, 2);
+        logf("higher max speed: on");
+    }
+}
 
 BOOL WINAPI DllMain(HINSTANCE self, DWORD reason, LPVOID unused)
 {
@@ -867,6 +904,7 @@ BOOL WINAPI DllMain(HINSTANCE self, DWORD reason, LPVOID unused)
         logf("this isn't the Saints Row 2 executable the menu knows; menu off (input passes through)");
         return TRUE;
     }
+    start_up_patches();
     HANDLE t = CreateThread(NULL, 0, installer, NULL, 0, NULL);
     if (t) CloseHandle(t);
     return TRUE;
