@@ -149,6 +149,9 @@ local function vehicle_speed(veh)
 end
 local function fov_frame()
   local mult = F.on("fov") and F.items.fov.v or 1.0
+  if F.on("first_person") and G.player() ~= 0 and not G.vehicle_handle(G.player()) then
+    mult = F.items.first_person_fov.v or 1.0
+  end
   if F.on("speed_fov") and F.items.speed_fov.v ~= 90 then
     local info, veh = vehicle_info()
     if info then
@@ -159,6 +162,26 @@ local function fov_frame()
   end
   fov_cell(mult)
   return mult ~= 1.0
+end
+
+-- ---------------------------------------------------------------- first person
+-- The on-foot camera pulled into your chest (as Juiced Patch's first-person
+-- camera does): the walking camera's zoom in its camera-state table
+-- (0x025F6318, 0x2C a state; state 0 = on foot outside, whose zoom is
+-- 0x025F6334) held at the row's depth, the state kept at 0 (the game
+-- switches to running / indoor states, 1, 2, 0x10, 0x17, with their own
+-- zooms), and the fade that hides you when the camera is close switched off.
+-- Mouse look and aiming stay the game's own. On foot only: in a car the
+-- game's own camera is left alone.
+local FP_ZOOM, FP_STATE, FP_FADE = 0x025F6334, 0x00E9A5BC, 0x00E8825F
+local FP_STATES = { [1] = true, [2] = true, [0x10] = true, [0x17] = true }
+local function first_person_frame(p, depth)
+  if read_f32(FP_ZOOM) ~= depth then hold_u32(FP_ZOOM, true, string.unpack("<I4", string.pack("<f", depth))) end
+  if read_u8(FP_FADE) ~= 0 then hold_u8(FP_FADE, true, 0) end
+  if FP_STATES[read_u32(FP_STATE)] then write_u32(FP_STATE, 0) end
+end
+local function first_person_off()
+  hold_u32(FP_ZOOM, false); hold_u8(FP_FADE, false)
 end
 
 -- ---------------------------------------------------------------- camera turn speed
@@ -272,6 +295,21 @@ function Q.setup(features)
     { id = "fov", label = "Field of view", kind = "value", needs = "none", default = 1.0, min = 0.5, max = 2.0, step = 0.05,
       fmt = F.fmtx, v = S("field_of_view", 1.0),
       help = "Widens the normal camera, on foot and driving. Cutscenes keep the game's own." },
+    { id = "first_person", label = "First-person view", kind = "toggle", v = S("first_person", false),
+      help = "See through your own eyes on foot: aim, shoot and look about as usual. Experimental. Set the field of view and depth below.",
+      update = function(ctx, p, v)
+        if v ~= 0 or G.in_cutscene() then first_person_off() return end
+        first_person_frame(p, F.items.first_person_depth.v or -0.6)
+      end,
+      off = function() first_person_off() end },
+    { id = "first_person_fov", label = "First-person field of view", kind = "value", needs = "none", default = 1.2, min = 0.6, max = 2.0,
+      step = 0.05, fmt = F.fmtx, oneshot = true, v = S("first_person_fov", 1.2),
+      hidden = function() return not F.items.first_person.v end,
+      help = "How wide you see in first person (x1 = the game's own; higher = zoomed out, more on screen)." },
+    { id = "first_person_depth", label = "First-person camera depth", kind = "value", needs = "none", default = -0.6, min = -1.5, max = 0.5,
+      step = 0.1, fmt = function(v) return string.format("%.1f", v) end, oneshot = true, v = S("first_person_depth", -0.6),
+      hidden = function() return not F.items.first_person.v end,
+      help = "Where the camera sits: lower is further into you (-0.6 = your eyes, about), higher pulls it back out over your shoulder." },
     { id = "camera_turn", label = "Camera turn speed", kind = "value", needs = "none", default = 1.0, min = 0.5, max = 2.0, step = 0.1,
       fmt = F.fmtx, v = S("camera_turn_speed", 1.0),
       help = "How fast the mouse turns the camera, on top of the game's own sensitivity (Options > Controls).",

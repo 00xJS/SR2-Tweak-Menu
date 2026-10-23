@@ -23,6 +23,7 @@ local PLACE = {
   { page = "player_movement", after = "crouch_moving", rows = { "sprint_on_fire" } },
   { page = "player_health", after = "no_ragdoll", rows = { "disarm_ragdoll" } },
   { tab = "Weapons", after = "car_reload", rows = { "reload_sprint", "switch_any" } },
+  { page = "visual_camera", after = "fov", rows = { "first_person", "first_person_fov", "first_person_depth" } },
   { page = "visual_camera", rows = { "no_climb_cam", "no_sprint_shake" } },
   { tab = "Visual", after = "map_arrow", rows = { "no_black_bars", "no_screen_blur", "no_vignette" } },
   { new_page = "style_movement", tab = "Customize", label = "Movement", help = "How you walk, run and stand.",
