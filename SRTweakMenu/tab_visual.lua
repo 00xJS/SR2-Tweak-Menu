@@ -14,6 +14,7 @@ return function(F, G)
       update = function() G.vint("hud_hide(true)") end,
       off = function() G.vint("hud_hide(false)") end },
     ENGINE.free_cam_row(),
+    ENGINE.cam_mode_row(),
     ENGINE.no_fog_row(),
 
     { id = "giant", label = "Giant player", kind = "toggle", cheat = "Giant Player", help = "You're huge (the phone's cheat)." },

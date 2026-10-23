@@ -195,28 +195,35 @@ end
 
 -- ---------------------------------------------------------------- camera
 -- Free camera: the game's slew camera (mode 2 leaves the camera to its
--- globals) moved by its own slew mover each frame.
+-- globals), flown with its own slew mover each frame; or held on the shot
+-- while you play on (Free camera mode), with the world kept loading round
+-- you, not the camera (the streaming centre's mode test, 0x009DF503).
 local CAM_MODE, CAM_POS, CAM_ORIENT = 0x025F5AE8, 0x025F5B20, 0x025F5B5C
-local free_on = false
+local STREAM_TEST = { 0x009DF503, "\x0F\x85\xA6\x02\x00\x00", "\x90\x90\x90\x90\x90\x90" }
+local free_on, holding = false, false
+local function hold_shot(on)
+  if on == holding then return end
+  holding = on
+  wml.patch(STREAM_TEST[1], on and STREAM_TEST[3] or STREAM_TEST[2])
+end
 function E.free_cam_row()
   return { id = "free_cam", label = "Free camera", kind = "toggle", nosave = true,
-    help = "Detaches the camera and lets you fly it about (the game's slew camera).",
+    help = "Detaches the camera: fly it about (the game's slew camera), or leave it on the shot and play on (Free camera mode).",
     update = function()
       if not free_on then free_on = true; write_u32(CAM_MODE, 2) end
-      wml.call(0x00C01650, CAM_POS, CAM_ORIENT, wml.f2u(dt()), 0, 0)
+      local hold = F.items.cam_mode and F.items.cam_mode.v == 2
+      hold_shot(hold)
+      if not hold then wml.call(0x00C01650, CAM_POS, CAM_ORIENT, wml.f2u(dt()), 0, 0) end
     end,
     off = function()
       free_on = false
+      hold_shot(false)
       write_u32(CAM_MODE, G.in_cutscene() and 5 or 0)
     end }
 end
-
--- Field of view: the camera's current and target values, every frame.
-function E.fov_row()
-  return { id = "fov", label = "Field of view", kind = "value", default = 0, min = 0, max = 120, step = 5,
-    fmt = function(v) return v == 0 and "game's" or string.format("%d", v) end,
-    help = "The camera's field of view in degrees (0 = the game's own).",
-    update = function(ctx, p, v, it) write_f32(0x025F5BA8, it.v); write_f32(0x025F5BA4, it.v) end }
+function E.cam_mode_row()
+  return { id = "cam_mode", label = "Free camera mode", kind = "choice", needs = "none", options = { "Fly", "Hold this shot" }, v = 1,
+    nosave = true, help = "Fly: move the free camera. Hold this shot: it stays put and you play on in front of it." }
 end
 
 -- No fog: the game's own fog override (its debug command's flag and values).
@@ -334,6 +341,71 @@ function E.everybody_row()
       local list = humans()
       for i, o in ipairs(list) do set_state(o, choice[1] and states[(i - 1) % #states + 1] or 0xFFFFFFFF) end
       return choice[1] and string.format("Everybody: %s (%d people)", choice[2], #list) or "Everybody back to normal"
+    end }
+end
+
+-- ---------------------------------------------------------------- staged scenes
+-- Two people spawned in front of you, placed and set going on one of the
+-- game's paired animations (as its own ambient pairs are). Experimental: the
+-- placement is worked out from the game's code, not yet seen in play.
+local SCENES = {
+  { { "pair dance a", "pair dance a" }, "Dance pair", 0.7 },
+  { { "pair dance c", "pair dance c" }, "Dance pair 2", 0.7 },
+  { { "Lapdance Stand Give", "Lapdance Sit Get" }, "Lap dance", 0 },
+  { { "Lover Sit B", "Lover Sit A" }, "Lovers", 0 },
+  { { "Picnic Sit A", "Picnic Sit B" }, "Picnic", 0 },
+  { { "Blunt Sit Left", "Blunt Sit Right" }, "Smoke a blunt", 0 },
+  { { "RPS Stand", "RPS Stand" }, "Rock, paper, scissors", 0.8 },
+  { { "talking long", "talking yes" }, "Chat", 0.9 },
+}
+local scene_people = {}
+-- Puts a human at x, y, z facing yaw (radians), with the teleport script's call.
+local function place(h, x, y, z, yaw)
+  local pos, m = wml.buffer(10), wml.buffer(11)
+  write_f32(pos, x); write_f32(pos + 4, y); write_f32(pos + 8, z)
+  local c, s = math.cos(yaw), math.sin(yaw)
+  local rows = { c, 0, -s, 0, 1, 0, s, 0, c }
+  for k = 1, 9 do write_f32(m + (k - 1) * 4, rows[k]) end
+  wml.callx(0x009A0B00, { ecx = m, edx = pos }, h, 0, 1, 0, 0)
+end
+function E.scene_row()
+  local items = {}
+  for _, s in ipairs(SCENES) do items[#items + 1] = { s, s[2] } end
+  return { id = "scene", label = "Stage a scene", kind = "list", items = items, nosave = true,
+    help = "Left/Right to choose, Enter: two people act it out in front of you. Experimental.",
+    run = function(ctx, p, v, it)
+      local sc = it.items[it.v][1]
+      local list = character_list()
+      if #list == 0 then return "No character list" end
+      local fx, fz = read_f32(p + 0x38), read_f32(p + 0x40)
+      local yaw = math.atan(fx, fz)
+      local cx, cy, cz = read_f32(p + 0x14) + fx * 3, read_f32(p + 0x18), read_f32(p + 0x1C) + fz * 3
+      local made = 0
+      for i = 1, 2 do
+        local h = spawn_person(list[math.random(#list)][1], false)
+        if h then
+          made = made + 1
+          scene_people[#scene_people + 1] = read_u32(h + 0x44)
+          local off = (i == 1) and -sc[3] / 2 or sc[3] / 2
+          place(h, cx + fx * off, cy, cz + fz * off, (i == 1) and yaw or yaw + math.pi)
+          local idx = state_index(sc[1][i])
+          if idx then set_state(h, idx) end
+        end
+      end
+      return made == 2 and ("Scene: " .. sc[2]) or "Couldn't spawn the people (too many about?)"
+    end }
+end
+function E.clear_scene_row()
+  return { id = "clear_scene", label = "Clear scene", kind = "action",
+    help = "The people from Stage a scene go away.",
+    run = function()
+      local n = 0
+      for _, h in ipairs(scene_people) do
+        local o = object(h)
+        if o and read_u32(o + 0x4C) == 1 then wml.callx(NPC.DELETE, { ecx = o }, 0); n = n + 1 end
+      end
+      scene_people = {}
+      return "Cleared " .. n
     end }
 end
 

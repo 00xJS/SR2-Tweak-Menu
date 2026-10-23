@@ -24,7 +24,7 @@
 local G = require("game")
 local S = wml.setting
 
-local F = { categories = {}, items = {}, enabled = true, debug = false }
+local F = { categories = {}, items = {}, enabled = true, debug = false, after_updates = {} }
 
 -- Optional data files: a missing or broken one leaves its list empty.
 function F.data(name)
@@ -115,7 +115,7 @@ do
   local ok, err = pcall(function()
     local QOL = require("qol")
     QOL.setup(F)
-    F.after_update = QOL.after_update
+    F.after_updates[#F.after_updates + 1] = QOL.after_update
   end)
   if not ok then wml.log("qol failed to load: " .. tostring(err)) end
 end
@@ -123,6 +123,15 @@ end
 do
   local ok, err = pcall(function() require("gameplay").setup(F) end)
   if not ok then wml.log("gameplay failed to load: " .. tostring(err)) end
+end
+-- Looks and people: filters, letterbox, voice lines, scenes, poses.
+do
+  local ok, err = pcall(function()
+    local VIS = require("visual")
+    VIS.setup(F)
+    F.after_updates[#F.after_updates + 1] = VIS.after_update
+  end)
+  if not ok then wml.log("visual failed to load: " .. tostring(err)) end
 end
 
 -- ---------------------------------------------------------------- updates
@@ -189,7 +198,7 @@ function F.update(ctx)
       if it.off and p ~= 0 then safe(it, it.off, ctx, p, v, it) end
     end
   end
-  if F.after_update then safe({ id = "after_update" }, F.after_update, p) end
+  for i, fn in ipairs(F.after_updates) do safe({ id = "after_update " .. i }, fn, p) end
 end
 
 -- ---------------------------------------------------------------- the menu's calls
