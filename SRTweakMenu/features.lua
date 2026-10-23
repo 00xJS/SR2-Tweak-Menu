@@ -1,7 +1,8 @@
 -- SR Tweak Menu (Saints Row 2) - the features, as the menu sees them.
 --
 -- The row engine is SR1's features.lua (the same kinds of row, the same
--- update rules) so menu.lua runs unchanged; the rows themselves are SR2's.
+-- update rules) so menu.lua runs unchanged; the rows themselves are SR2's,
+-- one file per tab (tab_*.lua), in SR1's tab order.
 --
 -- Every menu row is an item here. An item is one of:
 --   toggle   on/off; `update` runs every game update while on, `off` once
@@ -9,14 +10,29 @@
 --   value    a number; `update` runs while it differs from `default`, `off`
 --            when it returns to it, `change` once per adjustment.
 --   choice   one of `options`; `change` runs when it changes, `run` on Enter.
---   list     a long list; Left/Right browse, Enter picks.
+--   list     a long list (`items` of { id, "Shown name", ... }); Left/Right
+--            browse, Enter picks (`run`).
 --   action   `run` on Enter.
+--   header   a heading line.
 -- `needs` says what must be loaded: "player" (default), "vehicle", or "none".
+--
+-- Shorthand the SR2 rows use (handled here):
+--   cheat = "Name"   a toggle that switches the phone cheat of that name
+--                    (data/cheats.lua) on and off with the row.
+--   every = n        run `update` only every n updates, not every update.
 
 local G = require("game")
 local S = wml.setting
 
 local F = { categories = {}, items = {}, enabled = true, debug = false }
+
+-- Optional data files: a missing or broken one leaves its list empty.
+function F.data(name)
+  local ok, t = pcall(require, "data." .. name)
+  if ok and type(t) == "table" then return t end
+  wml.log("data/" .. name .. ".lua not loaded: " .. tostring(t):match("^[^\n]*"))
+  return {}
+end
 
 -- Registers rows (their defaults and needs) under F.items.
 function F.register(items)
@@ -25,10 +41,10 @@ function F.register(items)
     if it.kind == "toggle" then it.v = it.v == true
     elseif it.kind == "value" then it.v = it.v or it.default
     elseif it.kind == "choice" or it.kind == "list" then it.v = it.v or 1 end
-    F.items[it.id] = it
+    if it.id then F.items[it.id] = it end
   end
 end
-local function category(name, items)
+function F.category(name, items)
   F.categories[#F.categories + 1] = { name = name, items = items }
   F.register(items)
 end
@@ -45,51 +61,51 @@ function F.add_rows(name, after, items)
   end
 end
 
--- ---------------------------------------------------------------- rows
---
--- God mode: the game's own invulnerability (turn_invulnerable, what the
--- missions use), put on again every few seconds and after a load, since
--- missions and cutscenes switch it themselves.
-local god_on_player, god_tick = 0, 0
-local function god_apply(p)
-  G.script(nil, "turn_invulnerable(LOCAL_PLAYER)")
-  god_on_player, god_tick = p, F.tick
+-- ---------------------------------------------------------------- helpers for the tabs
+F.fmt1 = function(v) return string.format("%.1f", v) end
+F.fmtint = function(v) return string.format("%d", v) end
+F.fmtx = function(v) return string.format("x%.1f", v) end
+
+-- Phone cheats by name (data/cheats.lua: { index, "Name", "Category", "action", code = number }).
+local CHEATS = F.data("cheats")
+local cheat_number = {}
+for _, c in ipairs(CHEATS) do if c.code then cheat_number[c[2]:lower()] = c.code end end
+function F.cheat_number(name) return cheat_number[name:lower()] end
+-- Switches the named cheat on or off; returns a message if it can't.
+function F.cheat(name, on)
+  local n = cheat_number[name:lower()]
+  if not n then return "The game has no cheat called " .. name end
+  if G.cheat_set(n, on ~= false) == nil then return "The game didn't take the cheat " .. name end
+end
+-- A cheat that acts once (gives a vehicle, sets the weather): on, then off
+-- again so it can be used again.
+function F.cheat_once(name)
+  local msg = F.cheat(name, true)
+  if not msg then F.cheat(name, false) end
+  return msg
 end
 
-category("Player", {
-  { id = "god", label = "God mode", kind = "toggle",
-    help = "You can't be hurt.",
-    update = function(ctx, p)
-      if p ~= god_on_player or F.tick - god_tick > 180 then god_apply(p) end
-    end,
-    off = function(ctx, p)
-      if p ~= 0 then G.script(nil, "turn_vulnerable(LOCAL_PLAYER)") end
-      god_on_player = 0
-    end },
-  { id = "money", label = "Money +$50,000", kind = "action",
-    help = "Adds $50,000 to your cash.",
-    run = function()
-      G.script(nil, "cash_add(50000)")
-      return "Added $50,000"
-    end },
-})
+-- A page row (SR1's kind "page"): Enter opens `rows` on a page of its own.
+-- The rows are registered, so their toggles apply like any other.
+function F.page(id, label, help, rows)
+  F.register(rows)
+  return { id = id, label = label, kind = "page", needs = "none", help = help,
+    open = function() return { title = label, rows = rows } end }
+end
 
-category("Teleport", {
-  { id = "waypoint_go", label = "Teleport to waypoint", kind = "action",
-    help = "Takes you (and your car) to the waypoint set on the pause map.",
-    run = function()
-      local x, y, z = G.waypoint()
-      if not x then return "Set a waypoint on the map first" end
-      G.teleport(x, y, z)
-      return "Teleported to the waypoint"
-    end },
-})
+-- A header row.
+local heads = 0
+function F.header(label)
+  heads = heads + 1
+  return { id = "header_" .. heads, kind = "header", label = label, needs = "none" }
+end
 
-category("Settings", {
-  { id = "master", label = "All tweaks", kind = "toggle", needs = "none", v = true, help = "Turns every tweak on or off." },
-  { id = "status", label = "Show active tweaks", kind = "action", needs = "none", help = "",
-    run = function() return F.status_line() end },
-})
+-- ---------------------------------------------------------------- the tabs
+require("engine").attach(F)
+for _, tab in ipairs({ "player", "models", "emotes", "weapons", "vehicles", "world", "visual", "teleport", "settings" }) do
+  local ok, err = pcall(function() require("tab_" .. tab)(F, G) end)
+  if not ok then wml.log("tab " .. tab .. " failed to load: " .. tostring(err)) end
+end
 
 -- ---------------------------------------------------------------- updates
 
@@ -103,8 +119,10 @@ end
 
 -- Items that were active last update and need their `off` run.
 local was_active = {}
+-- Cheat toggles currently switched on in the game, by row id.
+local cheat_on = {}
 
-function F.on(id) return F.enabled and F.items[id].v end
+function F.on(id) return F.enabled and F.items[id] and F.items[id].v end
 
 -- Called every game update, after the menu has read its input.
 F.tick = 0
@@ -119,23 +137,41 @@ end
 
 local menu_open = false
 function F.set_menu_open(open) menu_open = open end
+function F.menu_open() return menu_open end
 
+local last_player = 0
 function F.update(ctx)
   F.tick = F.tick + 1
   local p = G.player()
-  local v = 0   -- (no vehicle rows yet)
+  if p ~= last_player then
+    -- A new game (or none): what we put on the old player is gone.
+    last_player = p
+    for id in pairs(was_active) do was_active[id] = nil end
+  end
+  local v = G.vehicle_handle(p) or 0
   for _, it in pairs(F.items) do
     local on = active(it)
     local ok = it.needs == "none" or (it.needs == "player" and p ~= 0) or (it.needs == "vehicle" and v ~= 0)
     if on and ok then
-      if it.update then safe(it, it.update, ctx, p, v, it) end
+      if it.cheat and not cheat_on[it.id] then
+        cheat_on[it.id] = true
+        safe(it, F.cheat, it.cheat, true)
+      end
+      if it.update and (not it.every or not was_active[it.id] or F.tick % it.every == 0) then
+        safe(it, it.update, ctx, p, v, it)
+      end
       was_active[it.id] = true
-    elseif was_active[it.id] and not on then
+    elseif not on and (was_active[it.id] or cheat_on[it.id]) then
       -- Switched off (or back to default): put things back once.
       was_active[it.id] = nil
-      if it.off then safe(it, it.off, ctx, p, v, it) end
+      if it.cheat and cheat_on[it.id] then
+        cheat_on[it.id] = nil
+        if p ~= 0 then safe(it, F.cheat, it.cheat, false) end
+      end
+      if it.off and p ~= 0 then safe(it, it.off, ctx, p, v, it) end
     end
   end
+  if F.after_update then safe({ id = "after_update" }, F.after_update, p) end
 end
 
 -- ---------------------------------------------------------------- the menu's calls
@@ -144,8 +180,8 @@ end
 
 local function context(it)
   local p = G.player()
-  local v = 0
-  if it.needs == "player" and p == 0 then return nil, "Load a single-player game first" end
+  if it.needs ~= "none" and p == 0 then return nil, "Load a single-player game first" end
+  local v = G.vehicle_handle(p) or 0
   if it.needs == "vehicle" and v == 0 then return nil, "Get in a vehicle first" end
   return p, v
 end
@@ -161,10 +197,6 @@ end
 
 function F.adjust(ctx, it, dir, fast)
   if it.kind == "value" then
-    if it.live and it.read then
-      local ok, r = pcall(it.read, G.player())
-      if ok and type(r) == "number" then it.v = r end
-    end
     local step = it.step * (fast and 10 or 1)
     local nv = it.v + dir * step
     nv = math.max(it.min, math.min(it.max, nv))
@@ -182,6 +214,7 @@ function F.adjust(ctx, it, dir, fast)
     return it.label .. ": " .. it.options[it.v]
   elseif it.kind == "list" then
     local n = #it.items
+    if n == 0 then return it.label .. ": nothing to choose" end
     it.v = ((it.v - 1 + dir * (fast and 10 or 1)) % n) + 1
     if it.change then
       local p, v = context(it)
@@ -194,6 +227,7 @@ end
 function F.activate(ctx, it)
   if it.kind == "toggle" then return F.toggle(ctx, it) end
   if it.kind == "value" then return F.adjust(ctx, it, 1) end
+  if it.kind == "list" and #it.items == 0 then return "Nothing to choose" end
   if it.run then
     local p, v = context(it)
     if not p and it.needs ~= "none" then return v end  -- v holds the reason
@@ -203,34 +237,20 @@ function F.activate(ctx, it)
   end
 end
 
--- (SR1 keeps the list entries usable right now here; SR2 has no such lists yet.)
+-- (SR1 keeps the list entries usable right now here; SR2's lists are all usable.)
 function F.refresh_usable(ctx) end
 
 function F.list_position(it)
-  if it.ok then
-    if #it.ok == 0 then return "none available" end
-    for k, i in ipairs(it.ok) do if i == it.v then return k .. "/" .. #it.ok end end
-    return "?/" .. #it.ok
-  end
+  if #it.items == 0 then return "none" end
   return it.v .. "/" .. #it.items
 end
 
 -- Text shown for an item's current value.
 function F.value_text(it)
   if it.kind == "toggle" then return it.v and "[ON]" or "[OFF]" end
-  if it.kind == "value" then
-    local shown = it.v
-    if it.live and it.read then
-      local p = G.player()
-      if p ~= 0 or it.needs == "none" then
-        local ok, r = pcall(it.read, p)
-        if ok and r then shown = r end
-      end
-    end
-    return "< " .. it.fmt(shown) .. " >"
-  end
+  if it.kind == "value" then return "< " .. it.fmt(it.v) .. " >" end
   if it.kind == "choice" then return "< " .. it.options[it.v] .. " >" end
-  if it.kind == "list" then return "< " .. it.items[it.v][2] .. " >" end
+  if it.kind == "list" then return #it.items > 0 and ("< " .. it.items[it.v][2] .. " >") or "< none >" end
   return ""
 end
 
@@ -241,6 +261,43 @@ function F.status_line()
   end
   table.sort(parts)
   return (F.enabled and "On: " or "Tweaks OFF. Would be on: ") .. (#parts > 0 and table.concat(parts, ", ") or "nothing")
+end
+
+-- ---------------------------------------------------------------- saved tweaks
+-- Settings > Save tweaks for next time: every row's value, one per line
+-- (id=value), in saved_tweaks.txt next to mod.ini. Rows marked nosave, and
+-- actions, aren't saved.
+F.SAVE_FILE = wml.mod_folder .. "\\saved_tweaks.txt"
+function F.save_tweaks()
+  local f = io.open(F.SAVE_FILE, "w")
+  if not f then return "Couldn't write " .. F.SAVE_FILE end
+  local n = 0
+  for id, it in pairs(F.items) do
+    if not it.nosave and (it.kind == "toggle" or it.kind == "value" or it.kind == "choice") then
+      f:write(id, "=", tostring(it.v), "\n"); n = n + 1
+    end
+  end
+  f:close()
+  return "Saved " .. n .. " tweaks for next time"
+end
+function F.load_tweaks()
+  local f = io.open(F.SAVE_FILE, "r")
+  if not f then return end
+  for line in f:lines() do
+    local id, v = line:match("^([%w_]+)=(.*)$")
+    local it = id and F.items[id]
+    if it and not it.nosave then
+      if it.kind == "toggle" then it.v = v == "true"
+      elseif it.kind == "value" then it.v = tonumber(v) or it.v
+      elseif it.kind == "choice" then local n = tonumber(v) if n and it.options[n] then it.v = n end end
+    end
+  end
+  f:close()
+  F.enabled = F.items.master.v
+end
+function F.forget_tweaks()
+  os.remove(F.SAVE_FILE)
+  return "Saved tweaks forgotten: the menu starts with everything off"
 end
 
 return F

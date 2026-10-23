@@ -1,0 +1,287 @@
+-- Where the Teleport tab can take you, by the game's own object names, for
+-- teleport("#PLAYER#", name). { name, display name, group }. Names only, no coordinates:
+-- none of the extracted tables give positions for these (the *_navpoints.xtbl files list
+-- names only), so name lookup is the only way in.
+-- How each group was judged:
+--   Districts      the "<district>_$nav-warp" navpoints that each district script's debug
+--                  warp_<district>() passes to teleport("#PLAYER#", ...); sr2_city.lua
+--                  includes every district script, so they are city-wide, not mission-only.
+--   Cribs          the first <Respawns> navpoint of each crib in cribs.xtbl
+--                  ("cribs_sr2_city_$X_crib_spawn1"): where the game itself puts you when
+--                  you respawn at that crib (inside). Not cross-checked against a navpoint
+--                  list (no cribs_sr2_city navpoint table was extracted).
+--   Crib Garages   "garage_sr2_city_$X_foot" navpoints (checked in garage_sr2_city_navpoints),
+--                  the on-foot spot at each crib garage / helipad / dock / hangar: outside.
+--   Stores         shops_sr2_city.xtbl: the shop's <Outside_Navpoint> (where the game puts
+--                  you outside the door), or for walk-up / drive-thru shops that have none,
+--                  its <Ownership_Trigger> (in front of the shop). Every name is checked
+--                  against shops_sr2_city_navpoints/_triggers. Group = the shop's chain.
+--                  District in the label comes from the object name's prefix ("TY Gun" is a
+--                  Brass Knuckles whose objects are BAR_brass_*, so it reads Barrio); "?"
+--                  marks a guess (AP, HER). MA = the underground mall (flag ug_interior).
+--                  The district guesses in crib names (HE, PI, AI, SB) are guesses too.
+--   Mission Starts <StartNav> of each story mission in sr2_city_missions.xtbl
+--                  ("mission_start_sr2_city_$xx"); mission scripts teleport to these
+--                  (e.g. ss05: teleport_coop("mission_start_sr2_city_$ss05", ...)).
+--   Strongholds    <StartNav> of each stronghold ("sr2_city_$sh_..."); sh_bh_apartments.lua
+--                  teleports to its own one.
+-- Not here: activities. Their start points are not in any extracted table; the only
+-- warp navpoints (fuzz_sx_$warp, escort_rl_warp, escort_un_warp) live in the activity's own
+-- zone, which, like bh01_$..., is only loaded while it runs. Race starts are in T.UNVERIFIED.
+local T = {
+  -- Districts
+  { "airport_$nav-warp",                        "Airport",                                    "Districts" },
+  { "apartments_$nav-warp",                     "Apartments",                                 "Districts" },
+  { "arena_$nav-warp",                          "Arena",                                      "Districts" },
+  { "barrio_$nav-warp",                         "Barrio",                                     "Districts" },
+  { "chinatown_$nav-warp",                      "Chinatown",                                  "Districts" },
+  { "docks_$nav-warp",                          "Docks",                                      "Districts" },
+  { "downtown_$nav-warp",                       "Downtown",                                   "Districts" },
+  { "factories_$nav-warp",                      "Factories",                                  "Districts" },
+  { "highend_$nav-warp",                        "High End Retail",                            "Districts" },
+  { "hotels_$nav-warp",                         "Hotels and Marina",                          "Districts" },
+  { "museum_$nav-warp",                         "Museum",                                     "Districts" },
+  { "nuke_$nav-warp",                           "Nuclear Plant",                              "Districts" },
+  { "prison_$nav-warp",                         "Prison",                                     "Districts" },
+  { "projects_$nav-warp",                       "Projects",                                   "Districts" },
+  { "redlight_$nav-warp",                       "Red Light",                                  "Districts" },
+  { "saintsrow_$nav-warp",                      "Saints Row",                                 "Districts" },
+  { "suburbs_$nav-warp",                        "Suburbs",                                    "Districts" },
+  { "subexp_$nav-warp",                         "Suburbs Expansion",                          "Districts" },
+  { "trailerpark_$nav-warp",                    "Trailer Park",                               "Districts" },
+  { "truckyard_$nav-warp",                      "Truck Yard",                                 "Districts" },
+  { "ultor_base_$nav-warp",                     "Ultor Base",                                 "Districts" },
+  { "underground_$nav-warp",                    "Underground",                                "Districts" },
+  { "university_$nav-warp",                     "University",                                 "Districts" },
+  -- Cribs
+  { "cribs_sr2_city_$HE_crib_spawn1",           "Loft (HE)",                                  "Cribs" },
+  { "cribs_sr2_city_$DT_crib_spawn1",           "Downtown Loft",                              "Cribs" },
+  { "cribs_sr2_city_$PI_crib_spawn1",           "Lighthouse (PI)",                            "Cribs" },
+  { "cribs_sr2_city_$SR_crib_spawn1",           "Saints Row Mega Crib",                       "Cribs" },
+  { "cribs_sr2_city_$RL_crib_spawn1",           "Red Light Brownstone",                       "Cribs" },
+  { "cribs_sr2_city_$SU_crib_spawn1",           "University Crib (SU)",                       "Cribs" },
+  { "cribs_sr2_city_$AI_crib_spawn1",           "Hotel Crib (AI, the \"airport crib\")",      "Cribs" },
+  { "cribs_sr2_city_$SHQ_spawn1",               "Saints Hideout (HQ)",                        "Cribs" },
+  -- Crib Garages
+  { "garage_sr2_city_$HE_crib_foot",            "Loft (HE) garage",                           "Crib Garages" },
+  { "garage_sr2_city_$DT_crib_foot",            "Downtown Loft garage",                       "Crib Garages" },
+  { "garage_sr2_city_$PI_crib_foot",            "Lighthouse (PI) garage",                     "Crib Garages" },
+  { "garage_sr2_city_$SR_crib_foot",            "Saints Row Mega Crib garage",                "Crib Garages" },
+  { "garage_sr2_city_$RL_crib_foot",            "Red Light Brownstone garage",                "Crib Garages" },
+  { "garage_sr2_city_$SU_crib_foot",            "University Crib (SU) garage",                "Crib Garages" },
+  { "garage_sr2_city_$AI_crib_foot",            "Hotel Crib (AI) garage",                     "Crib Garages" },
+  { "garage_sr2_city_$AI_crib_helipad_foot",    "Hotel Crib (AI) helipad",                    "Crib Garages" },
+  { "garage_sr2_city_$HE_crib_airport_foot",    "Loft (HE) airport hangar",                   "Crib Garages" },
+  { "garage_sr2_city_$SR_crib_heli_foot",       "Saints Row Mega Crib helipad",               "Crib Garages" },
+  { "garage_sr2_city_$SR_boat_foot",            "Saints Row Mega Crib boat dock",             "Crib Garages" },
+  { "garage_sr2_city_$SHQ_foot",                "Saints Hideout garage",                      "Crib Garages" },
+  { "garage_sr2_city_$SHQ_heli_foot",           "Saints Hideout helipad",                     "Crib Garages" },
+  { "garage_sr2_city_$SU_Dock_foot",            "Boat Dock (SU)",                             "Crib Garages" },
+  { "garage_sr2_city_$SB_Dock_foot",            "Boat Dock (SB)",                             "Crib Garages" },
+  { "garage_sr2_city_$AI_Hangar_foot",          "Airport Hangar (AI)",                        "Crib Garages" },
+  -- Clothing Stores
+  { "shops_sr2_city_$AIR_brand_out",            "Branded, Airport",                           "Clothing Stores" },
+  { "shops_sr2_city_$DT_branded_out",           "Branded, Downtown",                          "Clothing Stores" },
+  { "shops_sr2_city_$MAR_branded_out",          "Branded, Marina",                            "Clothing Stores" },
+  { "shops_sr2_city_$BAR_brass_own",            "Brass Knuckles, Barrio",                     "Clothing Stores" },
+  { "shops_sr2_city_$DT_brass_out",             "Brass Knuckles, Downtown",                   "Clothing Stores" },
+  { "shops_sr2_city_$MA_brass_out",             "Brass Knuckles, Mall (underground)",         "Clothing Stores" },
+  { "shops_sr2_city_$MU_brass_out",             "Brass Knuckles, Museum",                     "Clothing Stores" },
+  { "shops_sr2_city_$MU_gift_out",              "Buy Jove, Museum",                           "Clothing Stores" },
+  { "shops_sr2_city_$HER_imp_out",              "Impressions, High End?",                     "Clothing Stores" },
+  { "shops_sr2_city_$SR_imp_out",               "Impressions, Saints Row",                    "Clothing Stores" },
+  { "shops_sr2_city_$MA_lace_out",              "Leather & Lace, Mall (underground)",         "Clothing Stores" },
+  { "shops_sr2_city_$MA_pretend_out",           "Let's Pretend, Mall (underground)",          "Clothing Stores" },
+  { "shops_sr2_city_$MA_nobody_out",            "Nobody Loves Me, Mall (underground)",        "Clothing Stores" },
+  { "shops_sr2_city_$AR_rag_out",               "On the Rag, Arena",                          "Clothing Stores" },
+  { "shops_sr2_city_$RL_rag_own",               "On the Rag, Red Light",                      "Clothing Stores" },
+  { "shops_sr2_city_$SU_rag_out",               "On the Rag, Suburbs",                        "Clothing Stores" },
+  { "shops_sr2_city_$SX_rag_out",               "On the Rag, Suburbs Exp.",                   "Clothing Stores" },
+  { "shops_sr2_city_$BAR_slop_own",             "Sloppy Seconds, Barrio (BAR Sloppy Seconds)", "Clothing Stores" },
+  { "shops_sr2_city_$BAR_slop2_own",            "Sloppy Seconds, Barrio (BAR Sloppy Seconds South)", "Clothing Stores" },
+  { "shops_sr2_city_$RL_Slop_own",              "Sloppy Seconds, Red Light",                  "Clothing Stores" },
+  { "shops_sr2_city_$CV_gift_out",              "Spelunkers, Caverns",                        "Clothing Stores" },
+  { "shops_sr2_city_$UN_gift_out",              "Stilwater U Gifts, University",              "Clothing Stores" },
+  -- Jewelry Stores
+  { "shops_sr2_city_$PJ_bling_out",             "Bling Bling, Projects",                      "Jewelry Stores" },
+  { "shops_sr2_city_$AIR_ice_own",              "On Thin Ice, Airport",                       "Jewelry Stores" },
+  { "shops_sr2_city_$BAR_ice_own",              "On Thin Ice, Barrio",                        "Jewelry Stores" },
+  { "shops_sr2_city_$HER_ice_out",              "On Thin Ice, High End?",                     "Jewelry Stores" },
+  { "shops_sr2_city_$SR_ice_out",               "On Thin Ice, Saints Row",                    "Jewelry Stores" },
+  { "shops_sr2_city_$SU_ice_out",               "On Thin Ice, Suburbs",                       "Jewelry Stores" },
+  -- Tattoo Parlors
+  { "shops_sr2_city_$AP_tat_own",               "Rusty's Needle, Apartments?",                "Tattoo Parlors" },
+  { "shops_sr2_city_$DK_tat_own",               "Rusty's Needle, Docks",                      "Tattoo Parlors" },
+  { "shops_sr2_city_$DT_tat_out",               "Rusty's Needle, Downtown",                   "Tattoo Parlors" },
+  { "shops_sr2_city_$RL_tattoo_out",            "Rusty's Needle, Red Light",                  "Tattoo Parlors" },
+  -- Plastic Surgeons
+  { "shops_sr2_city_$DT_plas_out",              "Image As Designed, Downtown",                "Plastic Surgeons" },
+  { "shops_sr2_city_$HER_plas_out",             "Image As Designed, High End?",               "Plastic Surgeons" },
+  { "shops_sr2_city_$SR_plas_out",              "Image As Designed, Saints Row",              "Plastic Surgeons" },
+  { "shops_sr2_city_$SX_plas_out",              "Image As Designed, Suburbs Exp.",            "Plastic Surgeons" },
+  -- Gun Stores
+  { "shops_sr2_city_$AP_gun_own",               "Friendly Fire, Apartments?",                 "Gun Stores" },
+  { "shops_sr2_city_$DK_gun_own",               "Friendly Fire, Docks",                       "Gun Stores" },
+  { "shops_sr2_city_$DT_gun_out",               "Friendly Fire, Downtown",                    "Gun Stores" },
+  { "shops_sr2_city_$MA_gun_out",               "Friendly Fire, Mall (underground)",          "Gun Stores" },
+  { "shops_sr2_city_$SU_gun_out",               "Friendly Fire, Suburbs",                     "Gun Stores" },
+  -- Car Customization
+  { "shops_sr2_city_$AR_rim_out",               "Rim Jobs, Arena",                            "Car Customization" },
+  { "shops_sr2_city_$CT_rim_out",               "Rim Jobs, Chinatown",                        "Car Customization" },
+  { "shops_sr2_city_$DK_rim_out",               "Rim Jobs, Docks (DK Rim Jobs)",              "Car Customization" },
+  { "shops_sr2_city_$DK_rim2_out",              "Rim Jobs, Docks (DK Rim Jobs East)",         "Car Customization" },
+  { "shops_sr2_city_$NU_rim_out",               "Rim Jobs, Nuclear Plant",                    "Car Customization" },
+  { "shops_sr2_city_$SR_rim_out",               "Rim Jobs, Saints Row",                       "Car Customization" },
+  { "shops_sr2_city_$SU_rim_out",               "Rim Jobs, Suburbs",                          "Car Customization" },
+  { "shops_sr2_city_$TY_semi_out",              "Semi Broken, Truck Yard",                    "Car Customization" },
+  -- Vehicle Dealers
+  { "shops_sr2_city_$AR_bike_own",              "Bike Dealer, Arena",                         "Vehicle Dealers" },
+  { "shops_sr2_city_$MU_bike_own",              "Bike Dealer, Museum",                        "Vehicle Dealers" },
+  { "shops_sr2_city_$SU_bike_own",              "Bike Dealer, Suburbs",                       "Vehicle Dealers" },
+  { "shops_sr2_city_$MAR_boat_own",             "Boat Dealer, Marina",                        "Vehicle Dealers" },
+  { "shops_sr2_city_$SU_boat_own",              "Boat Dealer, Suburbs",                       "Vehicle Dealers" },
+  { "shops_sr2_city_$AR_car_own",               "Foreign Power, Arena",                       "Vehicle Dealers" },
+  { "shops_sr2_city_$MU_car_own",               "Foreign Power, Museum",                      "Vehicle Dealers" },
+  { "shops_sr2_city_$SR_car_own",               "Foreign Power, Saints Row",                  "Vehicle Dealers" },
+  { "shops_sr2_city_$SU_car_own",               "Foreign Power, Suburbs",                     "Vehicle Dealers" },
+  -- Food
+  { "shops_sr2_city_$AP_apollo_own",            "Apollo (Hot Coffee), Apartments?",           "Food" },
+  { "shops_sr2_city_$DK_apollo_own",            "Apollo (Hot Coffee), Docks",                 "Food" },
+  { "shops_sr2_city_$DT_apollo_own",            "Apollo (Hot Coffee), Downtown",              "Food" },
+  { "shops_sr2_city_$MA_apollo_own",            "Apollo (Hot Coffee), Mall (underground)",    "Food" },
+  { "shops_sr2_city_$tAIR_hard_own",            "Charred Hard Burgers, Airport",              "Food" },
+  { "shops_sr2_city_$MAR_hard_own",             "Charred Hard Burgers, Marina",               "Food" },
+  { "shops_sr2_city_$MU_hard_own",              "Charred Hard Burgers, Museum",               "Food" },
+  { "shops_sr2_city_$UN_hard_own",              "Charred Hard Burgers, University",           "Food" },
+  { "shops_sr2_city_$MA_gyros_own",             "Company Gyros, Mall (underground)",          "Food" },
+  { "shops_sr2_city_$SU_gyros_own",             "Company Gyros, Suburbs",                     "Food" },
+  { "shops_sr2_city_$AP_fb_own",                "Freckle Bitch's, Apartments?",               "Food" },
+  { "shops_sr2_city_$BAR_fb_own",               "Freckle Bitch's, Barrio",                    "Food" },
+  { "shops_sr2_city_$MA_freckle_own",           "Freckle Bitch's, Mall (underground)",        "Food" },
+  { "shops_sr2_city_$MU_fb_own",                "Freckle Bitch's, Museum",                    "Food" },
+  { "shops_sr2_city_$SU_fb_own",                "Freckle Bitch's, Suburbs",                   "Food" },
+  { "shops_sr2_city_$CT_phuc_own",              "Phuc Mi Phuc Yu, Chinatown",                 "Food" },
+  { "shops_sr2_city_$tMA_phuc_own",             "Phuc Mi Phuc Yu, Mall (underground)",        "Food" },
+  { "shops_sr2_city_$MAR_phuc_own",             "Phuc Mi Phuc Yu, Marina",                    "Food" },
+  -- Liquor Stores
+  { "shops_sr2_city_$AP_liq_own",               "Brown Baggers, Apartments?",                 "Liquor Stores" },
+  { "shops_sr2_city_$DK_liq_own",               "Brown Baggers, Docks",                       "Liquor Stores" },
+  { "shops_sr2_city_$HER_liq_out",              "Brown Baggers, High End?",                   "Liquor Stores" },
+  { "shops_sr2_city_$RL_liq_out",               "Brown Baggers, Red Light (RL Liquor)",       "Liquor Stores" },
+  { "shops_sr2_city_$RL_liq2_own",              "Brown Baggers, Red Light (RL Liquor 2)",     "Liquor Stores" },
+  { "shops_sr2_city_$TY_liq_own",               "Brown Baggers, Truck Yard",                  "Liquor Stores" },
+  -- Bars
+  { "shops_sr2_city_$AIR_bar_out",              "Bar, Airport",                               "Bars" },
+  { "shops_sr2_city_$BAR_bar_out",              "Bar, Barrio",                                "Bars" },
+  { "shops_sr2_city_$HER_bar_out",              "Bar, High End?",                             "Bars" },
+  { "shops_sr2_city_$SR_bar_out",               "Bar, Saints Row",                            "Bars" },
+  { "shops_sr2_city_$SU_bar_out",               "Bar, Suburbs",                               "Bars" },
+  -- Music Stores
+  { "shops_sr2_city_$AP_music_out",             "Scratch That, Apartments?",                  "Music Stores" },
+  { "shops_sr2_city_$BAR_music_own",            "Scratch That, Barrio",                       "Music Stores" },
+  { "shops_sr2_city_$SR_music_out",             "Scratch That, Saints Row",                   "Music Stores" },
+  { "shops_sr2_city_$SX_music_out",             "Scratch That, Suburbs Exp.",                 "Music Stores" },
+  { "shops_sr2_city_$UN_music_own",             "Scratch That, University",                   "Music Stores" },
+  -- Gas Stations
+  { "shops_sr2_city_$AP_gas_out",               "Gas Station, Apartments?",                   "Gas Stations" },
+  { "shops_sr2_city_$MAR_gas_own",              "Gas Station, Marina",                        "Gas Stations" },
+  { "shops_sr2_city_$SX_gas_out",               "Gas Station, Suburbs Exp. (SX Gas 1)",       "Gas Stations" },
+  { "shops_sr2_city_$SX_gas2_out",              "Gas Station, Suburbs Exp. (SX Gas 2)",       "Gas Stations" },
+  { "shops_sr2_city_$TY_gas_out",               "Gas Station, Truck Yard",                    "Gas Stations" },
+  { "shops_sr2_city_$UN_gas_out",               "Gas Station, University",                    "Gas Stations" },
+  -- Mission Starts
+  { "mission_start_sr2_city_$tss01",            "Saints (prologue) 1 (tss01)",                "Mission Starts" },
+  { "mission_start_sr2_city_$tss02",            "Saints (prologue) 2 (tss02)",                "Mission Starts" },
+  { "mission_start_sr2_city_$tss03",            "Saints (prologue) 3 (tss03)",                "Mission Starts" },
+  { "mission_start_sr2_city_$tss04",            "Saints (prologue) 4 (tss04)",                "Mission Starts" },
+  { "mission_start_sr2_city_$bh01",             "Brotherhood 1 (bh01)",                       "Mission Starts" },
+  { "mission_start_sr2_city_$bh02",             "Brotherhood 2 (bh02)",                       "Mission Starts" },
+  { "mission_start_sr2_city_$bh03",             "Brotherhood 3 (bh03)",                       "Mission Starts" },
+  { "mission_start_sr2_city_$bh04",             "Brotherhood 4 (bh04)",                       "Mission Starts" },
+  { "mission_start_sr2_city_$bh05",             "Brotherhood 5 (bh05)",                       "Mission Starts" },
+  { "mission_start_sr2_city_$bh06",             "Brotherhood 6 (bh06)",                       "Mission Starts" },
+  { "mission_start_sr2_city_$bh07",             "Brotherhood 7 (bh07)",                       "Mission Starts" },
+  { "mission_start_sr2_city_$bh08",             "Brotherhood 8 (bh08)",                       "Mission Starts" },
+  { "mission_start_sr2_city_$bh09",             "Brotherhood 9 (bh09)",                       "Mission Starts" },
+  { "mission_start_sr2_city_$bh10",             "Brotherhood 10 (bh10)",                      "Mission Starts" },
+  { "mission_start_sr2_city_$bh11",             "Brotherhood 11 (bh11)",                      "Mission Starts" },
+  { "mission_start_sr2_city_$rn01",             "Ronin 1 (rn01)",                             "Mission Starts" },
+  { "mission_start_sr2_city_$rn02",             "Ronin 2 (rn02)",                             "Mission Starts" },
+  { "mission_start_sr2_city_$rn03",             "Ronin 3 (rn03)",                             "Mission Starts" },
+  { "mission_start_sr2_city_$rn04",             "Ronin 4 (rn04)",                             "Mission Starts" },
+  { "mission_start_sr2_city_$rn05",             "Ronin 5 (rn05)",                             "Mission Starts" },
+  { "mission_start_sr2_city_$rn06",             "Ronin 6 (rn06)",                             "Mission Starts" },
+  { "mission_start_sr2_city_$rn07",             "Ronin 7 (rn07)",                             "Mission Starts" },
+  { "mission_start_sr2_city_$rn08",             "Ronin 8 (rn08)",                             "Mission Starts" },
+  { "mission_start_sr2_city_$rn09",             "Ronin 9 (rn09)",                             "Mission Starts" },
+  { "mission_start_sr2_city_$rn10",             "Ronin 10 (rn10)",                            "Mission Starts" },
+  { "mission_start_sr2_city_$rn11",             "Ronin 11 (rn11)",                            "Mission Starts" },
+  { "mission_start_sr2_city_$ss01",             "Sons of Samedi 1 (ss01)",                    "Mission Starts" },
+  { "mission_start_sr2_city_$ss02",             "Sons of Samedi 2 (ss02)",                    "Mission Starts" },
+  { "mission_start_sr2_city_$ss03",             "Sons of Samedi 3 (ss03)",                    "Mission Starts" },
+  { "mission_start_sr2_city_$ss04",             "Sons of Samedi 4 (ss04)",                    "Mission Starts" },
+  { "mission_start_sr2_city_$ss05",             "Sons of Samedi 5 (ss05)",                    "Mission Starts" },
+  { "mission_start_sr2_city_$ss06",             "Sons of Samedi 6 (ss06)",                    "Mission Starts" },
+  { "mission_start_sr2_city_$ss07",             "Sons of Samedi 7 (ss07)",                    "Mission Starts" },
+  { "mission_start_sr2_city_$ss08",             "Sons of Samedi 8 (ss08)",                    "Mission Starts" },
+  { "mission_start_sr2_city_$ss09",             "Sons of Samedi 9 (ss09)",                    "Mission Starts" },
+  { "mission_start_sr2_city_$ss10",             "Sons of Samedi 10 (ss10)",                   "Mission Starts" },
+  { "mission_start_sr2_city_$ss11",             "Sons of Samedi 11 (ss11)",                   "Mission Starts" },
+  { "mission_start_sr2_city_$ep00",             "Saints (epilogue) 0 (ep00)",                 "Mission Starts" },
+  { "mission_start_sr2_city_$ep01",             "Saints (epilogue) 1 (ep01)",                 "Mission Starts" },
+  { "mission_start_sr2_city_$ep02",             "Saints (epilogue) 2 (ep02)",                 "Mission Starts" },
+  { "mission_start_sr2_city_$ep03",             "Saints (epilogue) 3 (ep03)",                 "Mission Starts" },
+  { "mission_start_sr2_city_$ep04",             "Saints (epilogue) 4 (ep04)",                 "Mission Starts" },
+  { "mission_start_sr2_city_$em01",             "Emergent 1 (em01)",                          "Mission Starts" },
+  -- Strongholds
+  { "sr2_city_$sh_bh_airport",                  "Brotherhood: Airport",                       "Strongholds" },
+  { "sr2_city_$sh_bh_apartments",               "Brotherhood: Apartments",                    "Strongholds" },
+  { "sr2_city_$sh_bh_chinatown",                "Brotherhood: Chinatown",                     "Strongholds" },
+  { "sr2_city_$sh_bh_docks",                    "Brotherhood: Docks",                         "Strongholds" },
+  { "sr2_city_$sh_rn_museum_pier",              "Ronin: Museum Pier",                         "Strongholds" },
+  { "sr2_city_$sh_rn_rec_center",               "Ronin: Rec Center",                          "Strongholds" },
+  { "sr2_city_$sh_rn_sciencemuseum",            "Ronin: Science Museum",                      "Strongholds" },
+  { "sr2_city_$sh_rn_stripclub",                "Ronin: Strip Club",                          "Strongholds" },
+  { "sr2_city_$sh_tss_caverns",                 "Saints: Caverns",                            "Strongholds" },
+  { "sr2_city_$sh_ss_crackhouse",               "Samedi: Crackhouse",                         "Strongholds" },
+  { "sr2_city_$sh_ss_fishingdock",              "Samedi: Fishing Dock",                       "Strongholds" },
+  { "sr2_city_$sh_ss_student_union",            "Samedi: Student Union",                      "Strongholds" },
+  { "sr2_city_$nsh_ss_trailerpark",             "Samedi: Trailer Park",                       "Strongholds" },
+  { "sr2_city_$sh_tss_ugmall",                  "Ultor: Underground Mall",                    "Strongholds" },
+}
+
+-- Race start locations from racing_sr2_city.xtbl <Start_Location>. Unverified: the names
+-- have no "$" (so they are not "<zone>_$<object>" like every name above) and no script
+-- teleports to them. The races' own racing_sr2_city_<race>_$start navpoints exist but sit in
+-- per-race zones. Try before trusting. { name, display name, "Races" }.
+T.UNVERIFIED = {
+  { "diversion_start_sr2_city_race_bike_air",   "Bike race, Airport (bike_air)",              "Races" },
+  { "diversion_start_sr2_city_race_bike_ht",    "Bike race, Hotels (bike_ht)",                "Races" },
+  { "diversion_start_sr2_city_race_bike_mu",    "Bike race, Museum (bike_mu)",                "Races" },
+  { "diversion_start_sr2_city_race_bike_tp",    "Bike race, Trailer Park (bike_tp)",          "Races" },
+  { "diversion_start_sr2_city_race_bike_un",    "Bike race, University (bike_un)",            "Races" },
+  { "diversion_start_sr2_city_race_boat_ht",    "Boat race, Hotels (boat_ht)",                "Races" },
+  { "diversion_start_sr2_city_race_boat_pr",    "Boat race, Prison (boat_pr)",                "Races" },
+  { "diversion_start_sr2_city_race_car_air1",   "Car race, Airport 1 (car_air1)",             "Races" },
+  { "diversion_start_sr2_city_race_car_air2",   "Car race, Airport 2 (car_air2)",             "Races" },
+  { "diversion_start_sr2_city_race_car_dt",     "Car race, Downtown (car_dt)",                "Races" },
+  { "diversion_start_sr2_city_race_car_ht",     "Car race, Hotels (car_ht)",                  "Races" },
+  { "diversion_start_sr2_city_race_car_mu",     "Car race, Museum (car_mu)",                  "Races" },
+  { "diversion_start_sr2_city_race_car_nu",     "Car race, Nuclear Plant (car_nu)",           "Races" },
+  { "diversion_start_sr2_city_race_car_pj",     "Car race, Projects (car_pj)",                "Races" },
+  { "diversion_start_sr2_city_race_car_sr",     "Car race, Saints Row (car_sr)",              "Races" },
+  { "diversion_start_sr2_city_race_car_sx",     "Car race, Suburbs Exp. (car_sx)",            "Races" },
+  { "diversion_start_sr2_city_race_car_tp",     "Car race, Trailer Park (car_tp)",            "Races" },
+  { "diversion_start_sr2_city_race_heli_dt",    "Heli race, Downtown (heli_dt)",              "Races" },
+  { "diversion_start_sr2_city_race_heli_mu",    "Heli race, Museum (heli_mu)",                "Races" },
+  { "diversion_start_sr2_city_race_heli_sr",    "Heli race, Saints Row (heli_sr)",            "Races" },
+  { "diversion_start_sr2_city_race_jetski_cv",  "Jetski race, Caverns (jetski_cv)",           "Races" },
+  { "diversion_start_sr2_city_race_jetski_fa",  "Jetski race, Factories (jetski_fa)",         "Races" },
+  { "diversion_start_sr2_city_race_jetski_nu",  "Jetski race, Nuclear Plant (jetski_nu)",     "Races" },
+  { "diversion_start_sr2_city_race_jetski_pr",  "Jetski race, Prison (jetski_pr)",            "Races" },
+  { "diversion_start_sr2_city_race_jetski_sr",  "Jetski race, Saints Row (jetski_sr)",        "Races" },
+  { "diversion_start_sr2_city_race_air_air",    "Plane race, Airport (plane_air)",            "Races" },
+  { "diversion_start_sr2_city_race_air_un",     "Plane race, University (plane_un)",          "Races" },
+}
+
+return T

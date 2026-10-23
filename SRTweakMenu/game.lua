@@ -3,9 +3,10 @@
 -- game.lua has the same names for the Xbox 360 recompilation.
 --
 -- SR2 runs most of its gameplay from its own Lua 5.0 (the mission scripts):
--- G.script runs a line of it, and the game's script functions (cash_add,
--- turn_invulnerable, teleport...) do the work wherever they can. Addresses
--- are for what the scripts can't reach.
+-- G.lua runs a line of it, and the game's script functions (cash_add,
+-- turn_invulnerable, teleport...) do the work wherever they can. Its
+-- interface Lua ("vint": HUD, menus, the phone) holds the phone's cheats.
+-- Addresses are for what neither can reach.
 
 local read_u8, read_u32, read_f32 = wml.read_u8, wml.read_u32, wml.read_f32
 
@@ -26,6 +27,10 @@ G.P = {
   ORIENT = 0x20,  -- 3x3 floats
 }
 
+-- Notoriety teams, as the mission scripts name them.
+G.TEAMS = { police = "Police", brotherhood = "Brotherhood", ronin = "Ronin", samedi = "Samedi", ultor = "Ultor" }
+G.GANGS = { "Brotherhood", "Ronin", "Samedi", "Ultor" }
+
 G.debug = false
 
 function G.vec(a) return read_f32(a), read_f32(a + 4), read_f32(a + 8) end
@@ -39,11 +44,74 @@ end
 
 function G.in_cutscene() return read_u8(G.IN_CUTSCENE) ~= 0 end
 
+-- The handle of the vehicle the player is in, or nil on foot.
+G.P.VEHICLE = 0xD74
+function G.vehicle_handle(p)
+  if p == 0 then return nil end
+  local h = read_u32(p + G.P.VEHICLE)
+  if h == 0 or h == 0xFFFFFFFF then return nil end
+  return h
+end
+
 -- Runs Lua on the game's own state (its mission-script functions). `ctx`
 -- is SR1's hook context, kept so rows read the same; SR2 doesn't need it.
 function G.script(ctx, code)
   if G.debug then wml.log("script: " .. code) end
   return wml.script(code)
+end
+
+-- G.lua(fmt, ...): the same, formatted; strings are passed as Lua strings
+-- (%q), numbers as they are. Use %s for every argument.
+local function lit(v)
+  if type(v) == "string" then return string.format("%q", v) end
+  if type(v) == "boolean" or v == nil then return tostring(v) end
+  if math.type(v) == "integer" then return tostring(v) end
+  return string.format("%.4f", v)
+end
+-- The code can keep values between calls in the table T (TWEAK in the
+-- game's globals): the game guards its globals, so new names can't be
+-- made with a plain assignment.
+local PRELUDE = 'local T = rawget(_G, "TWEAK") if not T then T = {} rawset(_G, "TWEAK", T) end '
+function G.lua(fmt, ...)
+  local args = table.pack(...)
+  for i = 1, args.n do args[i] = lit(args[i]) end
+  local code = string.format(fmt, table.unpack(args, 1, args.n))
+  if code:find("T%.") then code = PRELUDE .. code end
+  return G.script(nil, code)
+end
+
+-- Runs code with `v` set to the name of the vehicle the player is in (it
+-- does nothing on foot).
+function G.vehicle_lua(fmt, ...)
+  return G.lua('local v = get_char_vehicle_name(LOCAL_PLAYER) if v and v ~= "" then ' .. fmt .. ' end', ...)
+end
+
+-- The interface's Lua (the phone, the HUD).
+function G.vint(code)
+  if G.debug then wml.log("vint: " .. code) end
+  return wml.vint(code)
+end
+
+-- The phone's cheats, through the game's own cheat code (what dialing a
+-- number and picking the cheat on the phone end up calling): a cheat is
+-- unlocked by its number (it then shows on the phone too) and switched by
+-- its slot in the save's list of unlocked cheats. Cheats mark the save as
+-- cheated, as on the phone.
+G.CHEAT_UNLOCK = 0x00687870   -- eax = "#number" -> slot (or -1)
+G.CHEAT_TOGGLE = 0x00687A00   -- eax = slot
+G.CHEAT_ACTIVE = 0x006878C0   -- eax = slot -> al: on?
+function G.cheat_slot(number)
+  local slot = wml.callx(G.CHEAT_UNLOCK, { eax = wml.buffer(9, "#" .. tostring(number)) })
+  if slot == 0xFFFFFFFF then return nil end
+  return slot
+end
+function G.cheat_on(slot) return (wml.callx(G.CHEAT_ACTIVE, { eax = slot }) & 0xFF) ~= 0 end
+-- Switches the cheat with this number on or off; returns whether it's on.
+function G.cheat_set(number, on)
+  local slot = G.cheat_slot(number)
+  if not slot then return nil end
+  if G.cheat_on(slot) ~= on then wml.callx(G.CHEAT_TOGGLE, { eax = slot }) end
+  return G.cheat_on(slot)
 end
 
 -- Puts the player (and the car they're in) at x, y, z.

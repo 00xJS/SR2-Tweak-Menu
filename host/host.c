@@ -155,12 +155,97 @@ static int l_write_f32(lua_State *s)
 static int l_f2u(lua_State *s) { float f = (float)luaL_checknumber(s, 1); uint32_t u; memcpy(&u, &f, 4); lua_pushinteger(s, u); return 1; }
 static int l_u2f(lua_State *s) { uint32_t u = (uint32_t)luaL_checkinteger(s, 1); float f; memcpy(&f, &u, 4); lua_pushnumber(s, f); return 1; }
 
-// ------------------------------------------------------------------ game calls
-// Runs code on the game's own Lua state (Lua 5.0, the mission scripts' one).
-static int game_dostring(const char *code)
+// ------------------------------------------------------------------ the game's Lua
+// The game has two Lua 5.0 states: the mission scripts' (gameplay functions
+// such as cash_add, teleport) and the interface's ("vint": the HUD, menus,
+// the phone and its cheats).
+//
+// Results come back through tweak_out(...), a C function we put in both
+// states' globals: whatever a script passes it while wml.script/wml.vint
+// runs is returned to our Lua. The game's Lua is stock 5.0: a TObject is 16
+// bytes (type, then the value at +8, numbers are doubles), L->top is at +8,
+// L->base at +12, the globals table at +0x40, a string's text 16 bytes into it.
+#define VINT_STATE_PTR    0x0252A1B8
+#define LUA50_PUSHSTRING  0x00CDCAF0   // esi = state, [esp] = text
+#define LUA50_PUSHCLOSURE 0x00CDCD30   // esi = state, [esp] = function, [esp+4] = upvalues
+#define LUA50_RAWSET      0x00CD5380   // luaH_set: cdecl (state, Table *, key) -> the value's slot
+
+#define OUT_MAX 128
+typedef struct { int type; double n; char s[256]; } outval_t;
+static outval_t g_out[OUT_MAX];
+static int g_out_n;
+
+static int __cdecl tweak_out(void *state)
 {
-    void *state = *(void **)LUA_STATE_PTR;
+    uint8_t *base = *(uint8_t **)((uint8_t *)state + 12), *top = *(uint8_t **)((uint8_t *)state + 8);
+    static int told;
+    if (!told++) logf("tweak_out called: %d values", (int)((top - base) / 16));
+    for (uint8_t *o = base; o < top && g_out_n < OUT_MAX; o += 16) {
+        outval_t *v = &g_out[g_out_n++];
+        v->type = *(int *)o;
+        v->s[0] = 0;
+        if (v->type == 1) v->n = *(int *)(o + 8);                       // boolean
+        else if (v->type == 3) v->n = *(double *)(o + 8);               // number
+        else if (v->type == 4) strncpy_s(v->s, sizeof v->s, *(char **)(o + 8) + 16, _TRUNCATE);  // string
+    }
+    return 0;
+}
+
+static void register_out(void *state)
+{
+    static int told;
+    if (told < 4) { told++; logf("adding tweak_out to Lua state %p (top %08X base %08X)", state, *(uint32_t *)((uint8_t *)state + 8), *(uint32_t *)((uint8_t *)state + 12)); }
+    static const char *name = "tweak_out";
+    void *fn = (void *)tweak_out;
+    __try {
+        __asm {
+            pushad
+            mov esi, state
+            push name
+            mov eax, LUA50_PUSHSTRING
+            call eax
+            add esp, 4
+            push 0
+            push fn
+            mov eax, LUA50_PUSHCLOSURE
+            call eax
+            add esp, 8
+            popad
+        }
+        // A raw set (luaH_set, then the value copied in): the game guards its
+        // globals with a metatable, which takes a plain settable of a new name.
+        uint8_t **top = (uint8_t **)((uint8_t *)state + 8);
+        uint8_t *globals = (uint8_t *)state + 0x40;
+        if (*(int *)globals == 5) {
+            uint8_t *table = *(uint8_t **)(globals + 8);
+            uint8_t *slot = ((uint8_t *(__cdecl *)(void *, void *, void *))LUA50_RAWSET)(state, table, *top - 0x20);
+            memcpy(slot, *top - 0x10, 16);
+            table[6] = 0;   // (its metamethod cache)
+        }
+        *top -= 0x20;
+    } __except (EXCEPTION_EXECUTE_HANDLER) { logf("couldn't add tweak_out to the game's Lua"); }
+}
+
+// Every couple of seconds (and whenever a state is new): the game can
+// rebuild its states, losing our function.
+static void keep_registered(void)
+{
+    static void *last_game, *last_vint;
+    static int countdown;
+    void *g = *(void **)LUA_STATE_PTR, *v = *(void **)VINT_STATE_PTR;
+    if (--countdown > 0 && g == last_game && v == last_vint) return;
+    countdown = 120;
+    if (g) register_out(g);
+    if (v) register_out(v);
+    last_game = g; last_vint = v;
+}
+
+static int g_last_status;
+static DWORD g_exception;
+static int game_dostring(void *state, const char *code)
+{
     if (!state) return 0;
+    int status = 0;
     __try {
         __asm {
             pushad
@@ -168,19 +253,45 @@ static int game_dostring(const char *code)
             mov eax, code
             mov edx, LUA_DOSTRING
             call edx
+            mov status, eax
             popad
         }
-    } __except (EXCEPTION_EXECUTE_HANDLER) { return -1; }
+    } __except (g_exception = GetExceptionCode(), EXCEPTION_EXECUTE_HANDLER) {
+        logf("exception %08X in the game's Lua running: %.200s", g_exception, code);
+        return -1;
+    }
+    g_last_status = status & 0xFF;
     return 1;
 }
-static int l_script(lua_State *s)
+// Returns: true if it ran (false: no such state yet), then every value the
+// code passed to tweak_out.
+static int run_in(lua_State *s, uint32_t state_ptr)
 {
-    int r = game_dostring(luaL_checkstring(s, 1));
-    if (r < 0) return luaL_error(s, "the game crashed running the script");
+    const char *code = luaL_checkstring(s, 1);
+    keep_registered();
+    g_out_n = 0;
+    g_last_status = 0;
+    int r = game_dostring(*(void **)state_ptr, code);
+    if (r < 0) return luaL_error(s, "the game crashed running: %s", code);
+    if (g_last_status) logf("game Lua (%s) status %d running: %.200s", state_ptr == VINT_STATE_PTR ? "vint" : "game", g_last_status, code);
     lua_pushboolean(s, r == 1);
-    return 1;
+    int n = g_out_n;
+    luaL_checkstack(s, n, "too many results");
+    for (int i = 0; i < n; i++) {
+        outval_t *v = &g_out[i];
+        if (v->type == 1) lua_pushboolean(s, v->n != 0);
+        else if (v->type == 3) {
+            if (v->n == (double)(lua_Integer)v->n) lua_pushinteger(s, (lua_Integer)v->n); else lua_pushnumber(s, v->n);
+        }
+        else if (v->type == 4) lua_pushstring(s, v->s);
+        else lua_pushnil(s);
+    }
+    return 1 + n;
 }
+static int l_script(lua_State *s) { return run_in(s, LUA_STATE_PTR); }
+static int l_vint(lua_State *s)   { return run_in(s, VINT_STATE_PTR); }
 
+// ------------------------------------------------------------------ game functions
 typedef uint32_t (__cdecl *cdecl8)(uint32_t, uint32_t, uint32_t, uint32_t, uint32_t, uint32_t, uint32_t, uint32_t);
 static int call_guarded(uint32_t fn, const uint32_t *a, uint32_t *out)
 {
@@ -188,8 +299,7 @@ static int call_guarded(uint32_t fn, const uint32_t *a, uint32_t *out)
     __except (EXCEPTION_EXECUTE_HANDLER) { return 0; }
 }
 // A cdecl call with up to 8 integer arguments (extra ones are harmless: the
-// caller cleans the stack). Functions taking arguments in registers need a
-// thunk of their own.
+// caller cleans the stack).
 static int l_call(lua_State *s)
 {
     uint32_t fn = check_addr(s, 1), a[8] = { 0 }, r;
@@ -198,6 +308,107 @@ static int l_call(lua_State *s)
     for (int i = 0; i < n; i++) a[i] = (uint32_t)luaL_checkinteger(s, i + 2);
     if (!call_guarded(fn, a, &r)) return luaL_error(s, "call %08X crashed", fn);
     lua_pushinteger(s, r);
+    return 1;
+}
+
+// callx(addr, regs, ...): many of SR2's functions take arguments in
+// registers. regs = { eax =, ebx =, ecx =, edx =, esi =, edi = } (any of
+// them), then up to 8 stack arguments; the caller cleans the stack. Returns eax.
+static uint32_t cx_fn, cx_esp, cx_ret, cx_eax, cx_ebx, cx_ecx, cx_edx, cx_esi, cx_edi, cx_n, cx_args[8];
+static __declspec(naked) void callx_thunk(void)
+{
+    __asm {
+        pushad
+        mov cx_esp, esp
+        mov ecx, cx_n
+    next_arg:
+        test ecx, ecx
+        jz args_done
+        dec ecx
+        push dword ptr [cx_args + ecx * 4]
+        jmp next_arg
+    args_done:
+        mov eax, cx_eax
+        mov ebx, cx_ebx
+        mov ecx, cx_ecx
+        mov edx, cx_edx
+        mov esi, cx_esi
+        mov edi, cx_edi
+        call dword ptr [cx_fn]
+        mov cx_ret, eax
+        mov esp, cx_esp
+        popad
+        ret
+    }
+}
+static int callx_guarded(void)
+{
+    __try { callx_thunk(); return 1; }
+    __except (EXCEPTION_EXECUTE_HANDLER) { return 0; }
+}
+static uint32_t reg_field(lua_State *s, const char *name)
+{
+    lua_getfield(s, 2, name);
+    uint32_t v = (uint32_t)luaL_optinteger(s, -1, 0);
+    lua_pop(s, 1);
+    return v;
+}
+static int l_callx(lua_State *s)
+{
+    cx_fn = check_addr(s, 1);
+    luaL_checktype(s, 2, LUA_TTABLE);
+    cx_eax = reg_field(s, "eax"); cx_ebx = reg_field(s, "ebx"); cx_ecx = reg_field(s, "ecx");
+    cx_edx = reg_field(s, "edx"); cx_esi = reg_field(s, "esi"); cx_edi = reg_field(s, "edi");
+    int n = lua_gettop(s) - 2;
+    if (n > 8) return luaL_error(s, "callx: at most 8 stack arguments");
+    cx_n = (uint32_t)n;
+    for (int i = 0; i < n; i++) cx_args[i] = (uint32_t)luaL_checkinteger(s, i + 3);
+    if (!callx_guarded()) return luaL_error(s, "callx %08X crashed", cx_fn);
+    lua_pushinteger(s, cx_ret);
+    return 1;
+}
+
+// buffer(slot [, text]): the address of a 1 KB scratch buffer (slots 0-15)
+// for passing strings, vectors and out-values to the game; with text, the
+// text is written there (zero-terminated) first.
+static char g_buffers[16][1024];
+static int l_buffer(lua_State *s)
+{
+    lua_Integer slot = luaL_checkinteger(s, 1);
+    if (slot < 0 || slot > 15) return luaL_error(s, "buffer: slot 0-15");
+    if (!lua_isnoneornil(s, 2)) {
+        size_t n; const char *t = luaL_checklstring(s, 2, &n);
+        if (n > 1023) n = 1023;
+        memcpy(g_buffers[slot], t, n); g_buffers[slot][n] = 0;
+    }
+    lua_pushinteger(s, (lua_Integer)(uintptr_t)g_buffers[slot]);
+    return 1;
+}
+// patch(addr, bytes): writes into the game's code or read-only data (made
+// writable for the write, then put back).
+static int l_patch(lua_State *s)
+{
+    uint32_t a = check_addr(s, 1);
+    size_t n; const char *b = luaL_checklstring(s, 2, &n);
+    DWORD old;
+    if (!VirtualProtect((void *)(uintptr_t)a, n, PAGE_EXECUTE_READWRITE, &old)) return luaL_error(s, "patch: can't unprotect %08X", a);
+    int ok = mem_write(a, b, (uint32_t)n);
+    VirtualProtect((void *)(uintptr_t)a, n, old, &old);
+    FlushInstructionCache(GetCurrentProcess(), (void *)(uintptr_t)a, n);
+    if (!ok) return luaL_error(s, "patch: bad write at %08X", a);
+    return 0;
+}
+// read_string(addr [, max]): a zero-terminated string from the game.
+static int l_read_string(lua_State *s)
+{
+    uint32_t a = check_addr(s, 1);
+    lua_Integer max = luaL_optinteger(s, 2, 256);
+    char buf[1024];
+    if (max > 1023) max = 1023;
+    int n = 0;
+    for (; n < max; n++) { if (!mem_read(a + n, &buf[n], 1)) return luaL_error(s, "bad read at %08X", a + n); if (!buf[n]) break; }
+    buf[n] = 0;
+    lua_pushstring(s, buf);
     return 1;
 }
 
@@ -351,7 +562,9 @@ static void start_lua(void)
         { "key_down", l_key_down }, { "key_pressed", l_key_pressed }, { "take_key", l_take_key },
         { "force_key", l_noop }, { "mouse_look", l_noop }, { "set_look", l_noop },
         { "on_frame", l_on_frame }, { "hook", l_hook },
-        { "script", l_script }, { "call", l_call }, { "pad", l_pad }, { "f2u", l_f2u }, { "u2f", l_u2f },
+        { "script", l_script }, { "vint", l_vint }, { "call", l_call }, { "callx", l_callx },
+        { "buffer", l_buffer }, { "read_string", l_read_string }, { "patch", l_patch },
+        { "pad", l_pad }, { "f2u", l_f2u }, { "u2f", l_u2f },
         { NULL, NULL }
     };
     luaL_newlib(L, api);
@@ -503,10 +716,18 @@ static int patch_call(uint32_t site, void *to, uint32_t *prev)
 }
 
 // Juiced Patch hooks both calls from its WinMain hook; ours go on top, so
-// we wait for it (up to 20 s: without Juiced we hook the game directly).
+// we wait for it (up to 20 s). Without Juiced (the game's own DFEngine.dll,
+// which lacks Juiced's API export) we hook the game straight away.
 static DWORD WINAPI installer(LPVOID unused)
 {
     (void)unused;
+    HMODULE engine = GetModuleHandleA("DFEngine.dll");
+    if (!engine || !GetProcAddress(engine, "RegisterVintLuaHookString")) {
+        logf("Juiced Patch isn't installed; hooking the game directly");
+        patch_call(DRAW_CALL_SITE, (void *)draw_thunk, &g_draw_prev);
+        patch_call(FRAME_CALL_SITE, (void *)frame_thunk, &g_frame_prev);
+        return 0;
+    }
     int waited = 0;
     for (; waited < 400; waited++) {
         if (call_target(FRAME_CALL_SITE) != FRAME_CALL_GAME && call_target(DRAW_CALL_SITE) != DRAW_CALL_GAME) break;

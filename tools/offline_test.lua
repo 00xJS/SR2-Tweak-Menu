@@ -1,14 +1,19 @@
 -- Offline test: runs the menu with a fake wml (memory, keys, settings) and
--- prints what the host would draw. Usage (from the repo root):
---   build\lua.exe tools\offline_test.lua
+-- checks what the host would do. Usage (from the repo root):
+--   build\lua.exe tools\offline_test.lua [-v]
+-- It opens the menu, goes through every tab, switches every toggle on and
+-- off, steps every value and list, and presses every action, then reports
+-- each row's game calls. -v also prints every screen and log line.
 local root = "SRTweakMenu"
 package.path = root .. "/?.lua"
+local verbose = arg[1] == "-v"
 
 local mem, mailbox = {}, {}
 local MAILBOX = 0x00F00000
 local keys_now, keys_prev = {}, {}
 local frames = {}
-local scripts, calls = {}, {}
+local calls = {}   -- every script / vint / call, in order
+local logs = {}
 local function rd(a, n)
   if a >= MAILBOX and a < MAILBOX + 0x40 + 8192 then
     if a == MAILBOX and n == 4 then return 0x53524D55 end
@@ -24,7 +29,7 @@ local function wr(a, n, v)
 end
 wml = {
   mod_folder = root, mod_name = "test", game = "sr2",
-  log = function(...) print("[log]", ...) end,
+  log = function(...) local t = table.concat({ ... }, " ") logs[#logs + 1] = t if verbose then print("[log]", t) end end,
   setting = function(_, d) return d end,
   read_u8 = function(a) return rd(a, 1) end, read_u16 = function(a) return rd(a, 2) end,
   read_u32 = function(a) return rd(a, 4) end,
@@ -37,13 +42,22 @@ wml = {
   take_key = function() end, force_key = function() end,
   on_frame = function(fn) frames[#frames + 1] = fn end,
   hook = function() error("no hooks") end,
-  script = function(code) scripts[#scripts + 1] = code return true end,
-  call = function(a) calls[#calls + 1] = string.format("%08X", a) return 0 end,
+  script = function(code) calls[#calls + 1] = "script: " .. code return true end,
+  vint = function(code) calls[#calls + 1] = "vint: " .. code return true end,
+  call = function(a) calls[#calls + 1] = string.format("call %08X", a) return 0 end,
+  callx = function(a) calls[#calls + 1] = string.format("callx %08X", a) return 0 end,
+  buffer = function(slot) return 0x7F000000 + slot * 1024 end,
+  read_string = function() return "" end,
+  patch = function(a) calls[#calls + 1] = string.format("patch %08X", a) end,
+  f2u = function(f) return string.unpack("<I4", string.pack("<f", f)) end,
+  u2f = function(u) return string.unpack("<f", string.pack("<I4", u)) end,
   pad = function() return nil end,
 }
 
--- A loaded single-player game with the player at 0x10000000.
-wr(0x00E94D3E, 1, 1); wr(0x00E8B210, 1, 0xFF); wr(0x021703D4, 4, 0x10000000)
+-- A loaded single-player game with the player at 0x10000000, in a car,
+-- with a waypoint set.
+wr(0x00E94D3E, 1, 1); wr(0x00E8B210, 1, 0xFF); wr(0x021703D4, 4, 0x10000000); wr(0x10000000 + 0xD74, 4, 0x1234)
+wr(0x01F7A418, 4, 1)
 
 dofile(root .. "/main.lua")
 local function frame(pressed)
@@ -59,21 +73,37 @@ local function screen()
 end
 local function press(k) frame(k); frame() end
 
+local F = require("features")
+local MENU = require("menu")
 frame()
 press("F5")
-print("---- menu open (Player tab)\n" .. screen())
-press("ENTER")                -- God mode on
-for _ = 1, 3 do frame() end
-press("DOWN"); press("ENTER") -- +$50,000
-print("---- after God mode + money\n" .. screen())
-press("PAGEDOWN"); press("ENTER")  -- Teleport tab: no waypoint yet
-print("---- teleport without a waypoint\n" .. screen())
-wr(0x01F7A418, 4, 1)
-wml.write_f32(0x029B9CD0, 100.5); wml.write_f32(0x029B9CD4, 20.25); wml.write_f32(0x029B9CD8, -300)
-press("ENTER")
-print("---- teleport with a waypoint: pos " .. wml.read_f32(0x027B305A) .. ", " .. wml.read_f32(0x027B305E) .. ", " .. wml.read_f32(0x027B3062))
-press("PAGEUP"); press("UP"); press("ENTER")    -- God mode off
+local problems = {}
+local total = 0
+for tab = 1, #F.categories do
+  local cat = F.categories[tab]
+  if verbose then print("==== " .. cat.name .. "\n" .. screen()) end
+  local rows = MENU.rows(MENU.tab)
+  print(string.format("%s (%d rows)", cat.name, #rows))
+  local seen = {}
+  while true do
+    local it = MENU.current()
+    if seen[it] then break end
+    seen[it] = true
+    total = total + 1
+    local before = #calls
+    if it.kind == "toggle" then press("ENTER"); for _ = 1, 3 do frame() end; press("ENTER"); for _ = 1, 3 do frame() end
+    elseif it.kind == "value" or it.kind == "choice" then press("RIGHT"); frame(); press("LEFT"); frame()
+    elseif it.kind == "list" then press("RIGHT"); press("ENTER")
+    elseif it.kind == "action" then press("ENTER") end
+    local made = {}
+    for i = before + 1, #calls do made[#made + 1] = calls[i] end
+    print(string.format("  %-7s %-28s %s", it.kind, it.label:sub(1, 28), made[1] or ""))
+    for i = 2, math.min(#made, 3) do print(string.rep(" ", 39) .. made[i]) end
+    if (MENU.status or ""):find("Error") then problems[#problems + 1] = cat.name .. " / " .. it.label .. ": " .. MENU.status end
+    press("DOWN")
+  end
+  press("PAGEDOWN")
+end
 press("F5")
-print("---- closed: '" .. screen() .. "'")
-print("scripts: " .. table.concat(scripts, " | "))
-print("calls: " .. table.concat(calls, " "))
+for _, l in ipairs(logs) do if l:find("fail") or l:find("rror") then problems[#problems + 1] = "log: " .. l end end
+print(total .. " rows; " .. (#problems == 0 and "no errors" or ("PROBLEMS:\n  " .. table.concat(problems, "\n  "))))
