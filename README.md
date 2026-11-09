@@ -8,7 +8,12 @@ here unchanged, so the tabs, pages, row order, keys and look match SR1. The
 rows underneath are SR2's own, built on the game's mission-script functions,
 its phone cheats and its engine.
 
-Work in progress: some SR1 rows have no SR2 version yet (see the end).
+**Status: early preview (0.3.0).** Every row passes the offline test, but
+most haven't been played in the game yet, so expect rough edges. Some SR1 rows
+have no SR2 version (see the end). Bug reports are welcome in Issues.
+
+**Offline only.** Use it in single player. Don't use it in co-op or online
+with people who didn't agree to it.
 
 ## Requirements
 
@@ -17,6 +22,9 @@ Work in progress: some SR1 rows have no SR2 version yet (see the end).
 - To build it: Visual Studio 2022 with **Desktop development with C++**.
 
 ## Build and install
+
+There's no prebuilt download yet. Build it from a Developer Command Prompt or
+a normal one (`build.bat` finds Visual Studio):
 
 ```bat
 host\build.bat
