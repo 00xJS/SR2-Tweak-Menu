@@ -469,6 +469,49 @@ function B.type_page(p)
   return page
 end
 
+-- For saved looks (looks.lua): the live record's values, read and written
+-- with the same calls the pages above use.
+B.VOICES, B.record, B.ready, B.morph_value, B.put = VOICES, record, ready, morph_value, put
+function B.busy() return restore ~= nil end
+-- Every control of a morph set with its value: { { id, value }, ... }.
+function B.morph_values(set)
+  local _, count = G.vint(([[
+    local list, count = {}, 0
+    rawset(_G, "TWK_body_add", function(id)
+      count = count + 1
+      list[count] = id
+    end)
+    pcr_report_avail_morphs(%q, "TWK_body_add")
+    rawset(_G, "TWK_body_add", nil)
+    rawset(_G, "TWK_body_list", list)
+    tweak_out(count)
+  ]]):format(set))
+  local values = {}
+  if type(count) ~= "number" then return values end
+  for first = 1, count, 40 do
+    local batch = table.pack(G.vint(([[
+      local list = rawget(_G, "TWK_body_list")
+      for i = %d, %d do tweak_out(list[i], pcr_get_morph_value(%q, list[i]) or false) end
+    ]]):format(first, math.min(first + 39, count), set)))
+    for i = 2, batch.n, 2 do
+      local id, value = batch[i], batch[i + 1]
+      if (type(id) == "number" or type(id) == "string") and type(value) == "number" and value >= 0 and value <= 1 then
+        values[#values + 1] = { id, value }
+      end
+    end
+  end
+  G.vint('rawset(_G, "TWK_body_list", nil)')
+  return values
+end
+function B.skin_current()
+  for _, entry in ipairs(catalog()) do
+    if entry[3] then return entry[1] end
+  end
+end
+function B.skin_put(id)
+  return G.vint(("pcr_change_skin_color(%d)"):format(id)) and true or false
+end
+
 function B.voice_page(F, p)
   local owner = record(p)
   local actor = wml.read_u32(p + 0x44)

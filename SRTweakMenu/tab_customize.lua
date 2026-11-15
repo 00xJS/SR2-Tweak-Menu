@@ -6,6 +6,7 @@ return function(F, G)
   local barber = require("hair")
   local native_walk = require("native_walk")
   local body = require("face_body")
+  local looks = require("looks")
   local rows, face, hair, clothes = {}, {}, {}, {}
   local hair_areas = {
     { "Head Hair", 0 }, { "Beard", 2 }, { "Mustache", 1 },
@@ -22,6 +23,7 @@ return function(F, G)
     barber.update(p)
     body.enabled = F.enabled
     body.update(p)
+    looks.update(p)
     if F.hair_preview then F.hair_preview() end
   end
 
@@ -200,6 +202,7 @@ return function(F, G)
     end
     rows[#rows + 1] = page("Mission Outfits", "Browse outfits worn in missions and activities.", contents)
   end
+  rows[#rows + 1] = looks.row(F)
   for _, category in ipairs(F.categories) do
     if category.name == "Customize" then
       F.items.open_creator = nil

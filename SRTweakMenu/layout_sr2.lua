@@ -14,6 +14,7 @@ local PLACE = {
   { page = "settings_unlocks", after = "unlock_reward_clothing", rows = { "crib_ammo", "unlock_cribs" } },
   { page = "weapons_special", rows = { "super_explosions", "milk_bones" } },
   { page = "vehicles_toughness", rows = { "infinite_mass" } },
+  { page = "vehicles_look", after = "vehicle_custom", rows = { "vehicle_presets" } },
   { page = "vehicles_look", rows = { "sirens" } },
   { page = "vehicles_handling", rows = { "acceleration", "higher_max_speed" } },
   { tab = "World", after = "low_gravity", rows = { "gravity", "game_speed" } },

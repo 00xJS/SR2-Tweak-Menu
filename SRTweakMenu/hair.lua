@@ -69,6 +69,10 @@ local function put(area, style)
   return applied == true
 end
 
+-- For saved looks (looks.lua).
+H.current, H.put, H.ready = current, put, ready
+function H.busy() return restore ~= nil end
+
 function H.update(p)
   if not restore then return end
   if p ~= restore.p or record(p) ~= restore.owner or wml.read_u32(p + 0x44) ~= restore.actor then

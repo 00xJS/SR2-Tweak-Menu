@@ -166,7 +166,7 @@ local function parts_page(session, slot)
     back = function() if differs(session, saved) then restore(session, saved) end end }
 end
 
-function V.page(F, p)
+local function open_session(p)
   if p == 0 or G.player() ~= p or G.in_cutscene() then return "Get in a vehicle first" end
   local handle = G.vehicle_handle(p)
   if not handle then return "Get in a vehicle first" end
@@ -183,17 +183,27 @@ function V.page(F, p)
   if count == 0 or count > 200 or array == 0 then return "This vehicle has no customization slots" end
   local session = { p = p, actor = read(p + 0x44), vehicle = car, handle = handle,
     instance = instance, info = info, slots = {} }
-  local rows = {}
   for i = 0, count - 1 do
     local address = array + i * 16
     local kind, components, part_count = read(address), read(address + 8), wml.read_u8(address + 0xC)
     if kind ~= 0 and components ~= 0 and part_count > 0 and part_count <= 128 then
-      local slot = { address = address, components = components, count = part_count,
-        label = label(read(kind), "Slot " .. (i + 1)) }
-      session.slots[#session.slots + 1] = slot
       -- Paint slots use the color rows in Look, rather than a list containing
       -- their single paintable placeholder component.
-      if read(kind + 8) ~= 1 then
+      session.slots[#session.slots + 1] = { address = address, components = components, count = part_count,
+        label = label(read(kind), "Slot " .. (i + 1)), paint = read(kind + 8) == 1 }
+    end
+  end
+  return session
+end
+
+function V.page(F, p)
+  local session = open_session(p)
+  if type(session) ~= "table" then return session end
+  local car, rows = session.vehicle, {}
+  do
+    for _, slot in ipairs(session.slots) do
+      local address, components, part_count = slot.address, slot.components, slot.count
+      if not slot.paint then
         local worn, available = current(session, address), false
         for component_index = 0, part_count - 1 do
           local component = components + component_index * 0x38
@@ -214,6 +224,116 @@ function V.page(F, p)
   F.vehicle_preview = session
   return { title = "Customize Vehicle", rows = rows, vehicle = car,
     back = function() if F.vehicle_preview == session then F.vehicle_preview = nil end end }
+end
+
+-- ---------------------------------------------------------------- presets
+-- A car's whole setup (every slot's part and its paint) kept by model. A
+-- part is saved as its place in its slot and a color by name, so a preset
+-- survives a restart; the model is told apart by its catalog's slots.
+local presets = require("presets")
+local COLOUR_POOL, COLOUR_BY_NAME = 0x0252A084, 0x00AC9F40
+local colours
+local function colour_name(record)
+  if not colours then
+    local ok, list = pcall(require, "data.vehicle_colors")
+    colours = ok and type(list) == "table" and list or {}
+  end
+  local offset = record - read(COLOUR_POOL)
+  local entry = offset >= 0 and offset % 28 == 0 and colours[offset // 28 + 1]
+  return entry and entry[1] or false
+end
+
+local function model_key(session)
+  local parts = {}
+  for i, slot in ipairs(session.slots) do parts[i] = slot.label .. ":" .. slot.count end
+  return table.concat(parts, "|")
+end
+
+local function capture(session)
+  if not V.valid(session) then return nil, "Get back in the vehicle to save it" end
+  local setup = { parts = {} }
+  for i, slot in ipairs(session.slots) do
+    local component = current(session, slot.address)
+    local entry = { label = slot.label, part = -1, colours = {} }
+    if component ~= 0 then
+      local offset = component - slot.components
+      if offset < 0 or offset % 0x38 ~= 0 or offset // 0x38 >= slot.count then
+        entry.part = false   -- a part from outside this slot's list: left as it is on load
+      else
+        entry.part = offset // 0x38
+        for colour = 0, wml.read_u8(component + 0x10) - 1 do
+          entry.colours[colour + 1] = colour_name(wml.callx(COLOUR,
+            { eax = session.instance, esi = component, edx = colour }))
+        end
+      end
+    end
+    setup.parts[i] = entry
+  end
+  return setup
+end
+
+local function apply(session, setup)
+  if not V.valid(session) then return "Get back in the vehicle to load a preset" end
+  local wanted = {}
+  for i, slot in ipairs(session.slots) do
+    local entry = setup.parts and setup.parts[i]
+    if type(entry) == "table" and entry.label == slot.label and type(entry.part) == "number"
+      and entry.part < slot.count then
+      wanted[i] = entry
+    end
+  end
+  if next(wanted) == nil then return "This preset doesn't fit this vehicle" end
+  -- The same order as putting a preview back: parts out, parts in, then paint.
+  for i, slot in ipairs(session.slots) do
+    local entry = wanted[i]
+    local component = entry and current(session, slot.address) or 0
+    if component ~= 0 and (entry.part < 0 or component ~= slot.components + entry.part * 0x38) then
+      wml.callx(REMOVE, { ecx = 0 }, session.instance, component)
+    end
+  end
+  for i, slot in ipairs(session.slots) do
+    local entry = wanted[i]
+    if entry and entry.part >= 0 then
+      local component = slot.components + entry.part * 0x38
+      if current(session, slot.address) ~= component then wml.call(FIT, session.instance, component, 0) end
+    end
+  end
+  local missed = 0
+  for i, slot in ipairs(session.slots) do
+    local entry = wanted[i]
+    if entry and entry.part >= 0 then
+      local component = slot.components + entry.part * 0x38
+      if current(session, slot.address) ~= component then
+        missed = missed + 1
+      else
+        for colour, name in ipairs(entry.colours or {}) do
+          local record = type(name) == "string" and colour <= wml.read_u8(component + 0x10)
+            and wml.callx(COLOUR_BY_NAME, { eax = wml.buffer(12, name) }) or 0
+          if record ~= 0 then wml.call(SET_COLOUR, session.instance, component, colour - 1, record) end
+        end
+      end
+    end
+  end
+  wml.callx(REFRESH, { eax = session.vehicle })
+  return missed > 0 and ("Preset loaded, " .. missed .. " parts couldn't be fitted") or "Preset loaded"
+end
+
+function V.presets_page(p)
+  local session = open_session(p)
+  if type(session) ~= "table" then return session end
+  local key = model_key(session)
+  return presets.page({ title = "Vehicle Presets", noun = "Preset", slots = 4,
+    store = function()
+      local all = presets.all()
+      all.vehicles = type(all.vehicles) == "table" and all.vehicles or {}
+      all.vehicles[key] = type(all.vehicles[key]) == "table" and all.vehicles[key] or {}
+      return all.vehicles[key]
+    end,
+    capture = function() return capture(session) end,
+    apply = function(setup) return apply(session, setup) end,
+    save_help = "Saves this vehicle's parts and paint. Presets are kept for each vehicle model.",
+    load_help = "Fits the saved parts and paint on the vehicle you're in.",
+  })
 end
 
 return V
