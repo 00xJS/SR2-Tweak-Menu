@@ -109,28 +109,8 @@ local function paint(p, slot_name, colour)
 end
 
 -- ---------------------------------------------------------------- car customization
--- SR2's own customization (interface mode 4), opened from the nearest Rim
--- Jobs: the game takes you and your car there to do it.
-local function customize(p)
-  if read_u8(0x02528ADF) == 1 or read_u32(0x00E8CF80) ~= 0xFFFFFFFF then return "Not now" end
-  if not G.vehicle_handle(p) then return "Get in a vehicle first" end
-  local px, pz = read_f32(p + 0x14), read_f32(p + 0x1C)
-  local best, bd = nil, math.huge
-  local n = read_u32(0x025274E0)
-  if n > 200 then return "No garages yet" end
-  for i = 0, n - 1 do
-    local rec = 0x02797BE0 + i * 0x94
-    local trig = read_u32(rec + 0x10)
-    if read_u32(rec + 4) == 4 and trig ~= 0 then
-      local dx, dz = read_f32(trig + 0x14) - px, read_f32(trig + 0x1C) - pz
-      local d = dx * dx + dz * dz
-      if d < bd then best, bd = trig, d end
-    end
-  end
-  if not best then return "No Rim Jobs found" end
-  wml.callx(0x007B9200, { eax = best })
-  return "Off to Rim Jobs"
-end
+-- The live editor fits parts directly on the current vehicle.
+local VEHICLE_CUSTOMIZE = require("vehicle_customize")
 
 -- ---------------------------------------------------------------- rows
 function P.setup(features)
@@ -183,9 +163,9 @@ function P.setup(features)
   local colour_items = {}
   for _, c in ipairs(COLOURS) do colour_items[#colour_items + 1] = { c[1], c[1] } end
   F.add_rows("Vehicles", nil, {
-    { id = "vehicle_custom", label = "Customize Vehicle", kind = "action", needs = "vehicle",
-      help = "SR2's own car customization, free to look at: the game takes you and your car to the nearest Rim Jobs for it.",
-      run = function(ctx, p) return customize(p) end },
+    { id = "vehicle_custom", label = "Customize Vehicle", kind = "page", needs = "vehicle",
+      help = "Preview and fit parts on your parked vehicle. Use the sticks or I/J/K/L to orbit and the triggers or Z/X to zoom.",
+      open = function(ctx, p) return VEHICLE_CUSTOMIZE.page(F, p) end },
     { id = "paint", label = "Paint vehicle", kind = "list", needs = "vehicle", items = colour_items, nosave = true,
       help = "Left/Right to choose (Shift: 10 at a time), Enter to apply.",
       run = function(ctx, p, v, it) return paint(p, "Body Color1", it.items[it.v][1]) or ("Painted " .. it.items[it.v][2]) end },

@@ -31,6 +31,8 @@ local TABS = {
         "rewards_header", "reward_free_shopping", "reward_bulletproof", "reward_blastproof", "reward_crashproof",
         "reward_police_forget", "reward_gangs_forget" }),
     "money", "respect" } },
+  { "Customize", { keep = true } },
+  { "Models", { keep = true, add = { "missing_moves", "loose_parts" } } },
   { "Weapons", {
     "infinite_ammo", "no_reload", "fire", "one_hit", "harder_hits", "perfect_aim", "no_melee_lock", "car_reload",
     page("weapons_special", "Special ammo", "Rocket and fire ammo, the money gun and explosive punches.",
@@ -42,7 +44,7 @@ local TABS = {
       { "skin_k6_krukov", "skin_vice_9", "skin_nr4", "skin_ar40_xtnd", "skin_skr7_spree", "skin_44_shepherd", "skin_tombstone",
         "skin_12_gauge", "skin_as12_riot", "skin_mcmanus", "skin_rpg", "skin_platinum_rpg", "skin_nightstick", "skin_crowbar",
         "skin_knife", "skin_baseball_bat", "skin_pimp_slap", "skin_pcp", "skins_reset" }),
-    "give_weapon", "all_weapons", "ammo_all" } },
+    "give_weapons", "give_weapon", "remove_weapon", "all_weapons", "ammo_all" } },
   { "Vehicles", {
     "veh_god", "veh_repair",
     page("vehicles_toughness", "Toughness", "Tank mode, bulletproof glass and tires, no explosion fling.",
@@ -63,18 +65,16 @@ local TABS = {
     page("world_districts", "Districts", "Who owns each part of Stilwater, and the whole map explored.",
       { "district", "district_owner", "district_apply", "explore_map" }) } },
   { "Visual", {
-    "hide_hud", "map_arrow", "letterbox", "filter", "render_mode", "saturation",
+    "hide_hud", "map_arrow", "letterbox", "filter", "render_mode", "draw_distance", "saturation",
     page("visual_camera", "Camera", "Field of view and camera turn speed.", { "fov", "camera_turn" }),
     page("visual_free_camera", "Free camera", "Fly the camera or leave it on a shot, and freeze the world.",
-      { "free_cam", "cam_mode", "freeze_world" }),
+      { "camera_shortcut", "camera_hide_ui", "free_cam", "cam_mode", "freeze_world" }),
     "settings_ui_plus" } },
   { "Teleport", { keep = true } },
-  { "Models", { keep = true, add = { "missing_moves", "loose_parts" } } },
-  { "Customize", { keep = true, add = { "outfit_back", "look_pose" } } },
   { "Emotes", { "poses", "actions", "player_voice_lines", "scene", "stop_pose", "clear_scene", "repeat_action", "repeat_every",
     "dpad_taunts" } },
   { "Settings", {
-    "master", "status", "save_tweaks", "forget_tweaks",
+    "master", "status", "save_tweaks", "forget_tweaks", "restore_menu", "restore_game",
     page("settings_game", "Game & saving", "Skip intro, load last save, quick save, pause cutscenes and tutorial popups.",
       { "skip_intro", "load_last_save", "load_wait", "quick_save", "cutscene_pause", "no_tutorials" }) } },
 }

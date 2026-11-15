@@ -8,6 +8,8 @@ local L = {}
 -- Page id or tab name -> SR2 rows to add there, in order. `after`: put them
 -- after that row instead of at the end.
 local PLACE = {
+  { tab = "Visual", after = "hide_hud", rows = { "hud_style", "hud_settings" } },
+  { tab = "World", after = "weather", rows = { "sky_type" } },
   { page = "player_notoriety", after = "wanted_police", rows = { "wanted_brotherhood", "wanted_ronin", "wanted_samedi", "wanted_ultor" } },
   { page = "settings_unlocks", after = "unlock_reward_clothing", rows = { "crib_ammo", "unlock_cribs" } },
   { page = "weapons_special", rows = { "super_explosions", "milk_bones" } },
@@ -26,8 +28,10 @@ local PLACE = {
   { page = "visual_camera", after = "fov", rows = { "first_person", "first_person_fov", "first_person_depth" } },
   { page = "visual_camera", rows = { "no_climb_cam", "no_sprint_shake" } },
   { tab = "Visual", after = "map_arrow", rows = { "no_black_bars", "no_screen_blur", "no_vignette" } },
-  { new_page = "style_movement", tab = "Customize", label = "Movement", help = "How you walk, run and stand.",
-    rows = { "walk_variant", "run_variant", "stand_variant" } },
+  { tab = "Emotes", after = "actions", rows = { "all_actions" } },
+  { new_page = "style_movement", tab = "Customize", label = "Movement",
+    help = "Preview a stance, walk or run in place. Accept applies a style your character can use in play.",
+    rows = { "stand_variant", "walk_variant", "run_variant" } },
 }
 
 local function tab_of(F, name)

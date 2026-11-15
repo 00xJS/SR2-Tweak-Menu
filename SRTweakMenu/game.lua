@@ -44,6 +44,14 @@ end
 
 function G.in_cutscene() return read_u8(G.IN_CUTSCENE) ~= 0 end
 
+-- On foot and in control: a player, no cutscene, not in a vehicle (SR1's
+-- G.playing, for the menu's hold-Back toggle).
+function G.playing(p)
+  if not p or p == 0 then return false end
+  if G.in_cutscene() then return false end
+  return G.vehicle_handle(p) == nil
+end
+
 -- The handle of the vehicle the player is in, or nil on foot.
 G.P.VEHICLE = 0xD74
 function G.vehicle_handle(p)

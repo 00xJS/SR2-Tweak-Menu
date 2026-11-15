@@ -7,7 +7,7 @@
 return function(F, G)
   local PLACES = F.data("places")
 
-  -- One list row per group in data/places.lua, in the order they come.
+  -- Each category opens a vertical list of its destinations.
   local groups, order = {}, {}
   for _, pl in ipairs(PLACES) do
     local g = pl[3] or "Places"
@@ -17,13 +17,16 @@ return function(F, G)
 
   local rows = {}
   for i, g in ipairs(order) do
-    rows[#rows + 1] = { id = "places_" .. i, label = g, kind = "list", items = groups[g], nosave = true,
-      help = "Left/Right to choose, Enter takes you there.",
-      run = function(ctx, p, v, it)
-        local pl = it.items[it.v]
-        if pl.x then G.teleport(pl.x, pl.y, pl.z) else G.lua('teleport("#PLAYER#", %s)', pl[1]) end
-        return "Teleported to " .. pl[2]
-      end }
+    local destinations = {}
+    for _, pl in ipairs(groups[g]) do
+      destinations[#destinations + 1] = { label = pl[2], kind = "action",
+        help = "Accept to teleport to " .. pl[2] .. ".",
+        run = function()
+          if pl.x then G.teleport(pl.x, pl.y, pl.z) else G.lua('teleport("#PLAYER#", %s)', pl[1]) end
+          return "Teleported to " .. pl[2]
+        end }
+    end
+    rows[#rows + 1] = F.page("places_" .. i, g, "Choose a destination.", destinations)
   end
   if #rows == 0 then
     rows[1] = { id = "places_none", label = "Places", kind = "action", needs = "none", help = "data/places.lua is missing.",

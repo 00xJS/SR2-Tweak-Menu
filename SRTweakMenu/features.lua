@@ -106,7 +106,7 @@ end
 
 -- ---------------------------------------------------------------- the tabs
 require("engine").attach(F)
-for _, tab in ipairs({ "player", "models", "emotes", "weapons", "vehicles", "world", "visual", "teleport", "settings" }) do
+for _, tab in ipairs({ "player", "models", "customize", "emotes", "weapons", "vehicles", "world", "visual", "teleport", "settings" }) do
   local ok, err = pcall(function() require("tab_" .. tab)(F, G) end)
   if not ok then wml.log("tab " .. tab .. " failed to load: " .. tostring(err)) end
 end
@@ -153,7 +153,15 @@ do
 end
 
 -- ---------------------------------------------------------------- updates
-
+do
+  local ok, err = pcall(function()
+    local HUD = require('hud_skins')
+    HUD.setup(F)
+    F.after_updates[#F.after_updates + 1] = HUD.after_update
+    require('hud_wheel').setup(F, G)
+  end)
+  if not ok then wml.log('HUD styles failed to load: ' .. tostring(err)) end
+end
 -- Items whose state is active right now.
 local function active(it)
   if not F.enabled then return false end
@@ -231,8 +239,13 @@ local function context(it)
   return p, v
 end
 
+-- Every row you press goes in the log (wml.log), so a crash can be traced to it.
+local function log_row(it, what) wml.log("row: " .. tostring(it.id or it.label) .. (what and (" " .. what) or "")) end
+F.log_row = log_row
+
 function F.toggle(ctx, it)
   if it.kind ~= "toggle" then return end
+  log_row(it, it.v and "off" or "on")
   it.v = not it.v
   if it.id == "master" then F.enabled = it.v end
   local p, v = context(it)
@@ -241,6 +254,7 @@ function F.toggle(ctx, it)
 end
 
 function F.adjust(ctx, it, dir, fast)
+  if it.kind == "value" or it.kind == "choice" then log_row(it, dir > 0 and "+" or "-") end
   if it.kind == "value" then
     local step = it.step * (fast and 10 or 1)
     local nv = it.v + dir * step
@@ -274,6 +288,7 @@ function F.activate(ctx, it)
   if it.kind == "value" then return F.adjust(ctx, it, 1) end
   if it.kind == "list" and #it.items == 0 then return "Nothing to choose" end
   if it.run then
+    log_row(it, it.kind == "list" and #it.items > 0 and tostring(it.items[it.v][1]) or nil)
     local p, v = context(it)
     if not p and it.needs ~= "none" then return v end  -- v holds the reason
     local ok, result = pcall(it.run, ctx, p or 0, v or 0, it)

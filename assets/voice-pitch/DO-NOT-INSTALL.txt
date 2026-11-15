@@ -1,0 +1,5 @@
+Do not install these banks (2026-11-13). SR2_VOC_WM/WF/BM/BF/HM/HF are shared by every
+pedestrian of that type, not only the six player voices; with them in
+Mods/SRTweakMenu/Audio the user heard pedestrian dialogue go quiet. Voice pitch needs a
+player-only approach (own bank copies on a player-only persona, or a pitch hook on the
+player's voice instance).

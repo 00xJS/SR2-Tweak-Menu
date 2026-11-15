@@ -29,7 +29,9 @@ cl /nologo /c /O2 /MT /W1 /TC %LUA_SRC% >nul || goto :fail
 cl /nologo /c /O2 /MT /W3 /TC /I"%LUA%" "%HERE%host.c" || goto :fail
 link /nologo /DLL /OUT:"%OUT%\dinput8.dll" /DEF:"%HERE%dinput8.def" /SAFESEH:NO *.obj user32.lib kernel32.lib || goto :fail
 popd
-echo Built %OUT%\dinput8.dll
+rem The same file as scripts\SRTweakMenu.asi, for a game that already has an ASI loader as its dinput8.dll.
+copy /y "%OUT%\dinput8.dll" "%OUT%\SRTweakMenu.asi" >nul || goto :fail
+echo Built %OUT%\dinput8.dll and %OUT%\SRTweakMenu.asi
 if /i not "%~1"=="install" exit /b 0
 copy /y "%OUT%\dinput8.dll" "%SR2_PATH%\dinput8.dll" >nul || goto :copy_failed
 echo Installed into %SR2_PATH%

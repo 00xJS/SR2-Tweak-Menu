@@ -24,6 +24,9 @@ return function(F, G)
     return items
   end
 
+  local GANG_TEAMS = { { "Playas", "The Saints" }, { "Brotherhood", "The Brotherhood" }, { "Ronin", "The Ronin" },
+    { "Samedi", "Sons of Samedi" }, { "Ultor", "Ultor" }, { "Police", "The Police" }, { "Civilian", "Civilians" } }
+
   local rows = {
     { id = "god", label = "God mode", kind = "toggle", every = 180,
       help = "You can't be hurt.",
@@ -40,7 +43,11 @@ return function(F, G)
     { id = "heal", label = "Refill health", kind = "action", help = "Fills your health.",
       run = function() G.lua("set_current_hit_points(LOCAL_PLAYER, get_max_hit_points(LOCAL_PLAYER))") return "Health refilled" end },
     { id = "kill_self", label = "Kill Yourself", kind = "action", help = "You die (and wake up at the hospital).",
-      run = function() G.lua("character_kill(LOCAL_PLAYER)") return "Bye" end },
+      run = function(_, p)
+        if F.stop_emote then F.stop_emote(p) end
+        G.lua("character_kill(LOCAL_PLAYER)")
+        return "Bye"
+      end },
 
     { id = "never_wanted", label = "Never wanted", kind = "toggle", every = 60,
       help = "Police and gangs never come after you.",
@@ -48,6 +55,30 @@ return function(F, G)
         for _, team in pairs(G.TEAMS) do G.lua("notoriety_set_max(%s, 0) notoriety_set(%s, 0)", team, team) end
       end,
       off = function() for _, team in pairs(G.TEAMS) do G.lua("notoriety_set_max(%s, 5)", team) end end },
+    -- SR1's gang rows on SR2's teams (set_team, as the missions move people
+    -- between sides): Saints are enemies puts you on the gang picked in Join
+    -- Gang, so that gang is on your side and the Saints and the rest aren't.
+    { id = "saints_enemies", label = "Saints are enemies", kind = "toggle", every = 120,
+      help = "The Saints treat you as a rival gang. You side with the gang picked in Join Gang.",
+      update = function()
+        local team = GANG_TEAMS[F.items.join_gang.v][1]
+        if team == "Playas" then team = "Brotherhood" end
+        G.lua("set_team(LOCAL_PLAYER, %s)", team)
+      end,
+      off = function() G.lua('set_team(LOCAL_PLAYER, "Playas")') end },
+    { id = "join_gang", label = "Join Gang", kind = "choice", needs = "none", v = 1,
+      options = (function() local t = {} for i, g in ipairs(GANG_TEAMS) do t[i] = g[2] end return t end)(),
+      help = "Choose your side directly. Members of that side can be recruited from Bodyguards.",
+      change = function(ctx, p, v, it)
+        if not p or p == 0 then return "Load a game before joining a gang" end
+        local team = GANG_TEAMS[it.v]
+        local ok = G.lua("set_team(LOCAL_PLAYER, %s)", team[1])
+        if not ok then return "Couldn't join " .. team[2] end
+        -- Keep the legacy compatibility toggle synchronized so its periodic
+        -- update cannot silently undo this direct affiliation choice.
+        if F.items.saints_enemies then F.items.saints_enemies.v = it.v ~= 1 end
+        return "You side with " .. team[2]
+      end },
     wanted_row("wanted_police", G.TEAMS.police, "Police notoriety"),
     wanted_row("wanted_brotherhood", G.TEAMS.brotherhood, "Brotherhood notoriety"),
     wanted_row("wanted_ronin", G.TEAMS.ronin, "Ronin notoriety"),
@@ -78,8 +109,8 @@ return function(F, G)
 
     F.page("player_bodyguards", "Bodyguards", "Bodyguards and homies: spawn them, dismiss them, how many you can have.", {
       ENGINE.bodyguard_row(),
-      { id = "dismiss_homies", label = "Dismiss all homies", kind = "action", help = "Sends every follower away.",
-        run = function() G.lua("party_dismiss_all()") return "Homies dismissed" end },
+      ENGINE.recruit_row(),
+      ENGINE.dismiss_homies_row(),
       { id = "homies", label = "More homies", kind = "toggle",
         help = "Lets you have the most followers the game allows.",
         change = function(ctx, p, v, it) G.lua("party_allow_max_followers(%s)", it.v) end,

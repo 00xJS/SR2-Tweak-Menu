@@ -119,6 +119,10 @@ local POSES = { { false, "Off" }, { "Cust Stand", "Stand" }, { "Cust Hair", "Hai
 local POSE_NAMES = {}
 for i, p in ipairs(POSES) do POSE_NAMES[i] = p[2] end
 
+-- ---------------------------------------------------------------- draw distance
+local DRAW_STEPS = { { "Game's own", 1.0 }, { "Far", 1.5 }, { "Farther", 2.0 }, { "Very far", 3.0 }, { "Furthest", 4.0 } }
+local draw_base
+
 -- ---------------------------------------------------------------- rows
 function V.setup(features)
   F = features
@@ -131,6 +135,18 @@ function V.setup(features)
     { id = "render_mode", label = "Render mode", kind = "choice", needs = "none", options = { "Normal", "Low detail" }, v = 1,
       help = "Low detail: the game's own debug low-detail rendering and a short draw distance (faster, uglier).",
       change = function(ctx, p, v, it) V.render_mode(it.v) end },
+    -- SR1's Draw Distance, on SR2's draw distance (f32 0x00E98988, the
+    -- value the low-detail render mode shortens): the game's own times a step.
+    { id = "draw_distance", label = "Draw Distance", kind = "value", needs = "none", default = 1, min = 1, max = #DRAW_STEPS, step = 1,
+      fmt = function(n) return DRAW_STEPS[n][1] end,
+      help = "How far away buildings, props and scenery still show before they fade out. Default is the game's own.",
+      update = function()
+        if F.items.render_mode and F.items.render_mode.v == 2 then return end   -- (low detail sets its own)
+        local base = draw_base or read_f32(0x00E98988)
+        draw_base = base
+        write_f32(0x00E98988, base * DRAW_STEPS[F.items.draw_distance.v][2])
+      end,
+      off = function() if draw_base then write_f32(0x00E98988, draw_base) draw_base = nil end end },
     { id = "letterbox", label = "Letterbox", kind = "toggle", needs = "player",
       help = "Cutscene black bars in play. Not with No cutscene black bars.",
       change = function(ctx, p, v, it) wml.call(it.v and 0x0075A4F0 or 0x0075A540, 0) end,
@@ -151,12 +167,8 @@ function V.setup(features)
       end },
   })
 
-  F.add_rows("Emotes", nil, {
-    F.page("player_voice_lines", "Voice Lines", "Say one of your character's taunts, compliments or shouts.", {
-      say_row("voice_taunts", "Taunts", situations("player taunt - ", TAUNTS)),
-      say_row("voice_compliments", "Compliments", situations("player compliment - ", COMPLIMENTS)),
-      say_row("voice_shouts", "Shouts", situations("voice - ", VOICES)),
-    }),
+  -- (Voice Lines is tab_emotes.lua's now: every line the voice has, SR1's way.)
+  F.add_rows("Emotes", "stop_pose", {
     ENGINE.scene_row(),
     ENGINE.clear_scene_row(),
   })
@@ -171,9 +183,14 @@ function V.setup(features)
       end },
     { id = "look_pose", label = "Customization pose", kind = "choice", options = POSE_NAMES, v = 1, nosave = true,
       help = "Strike the clothing store's poses to see your look: stand, hair, shoes, legs, wrists, rings.",
-      change = function(ctx, p, v, it)
-        local pose = POSES[it.v][1]
-        G.lua("set_animation_state(LOCAL_PLAYER, %s)", pose or "stand")
+      pose_name = function() return POSES[F.items.look_pose.v][1] end },
+    { id = "customization_tpose", label = "Customization T-pose", kind = "toggle", nosave = true,
+      help = "Hold the rig's rest pose while inspecting your character in Customize.",
+      change = function()
+        if F.items.customization_tpose.v and (not wml.preview_mode or not wml.preview_mode(true, true)) then
+          F.items.customization_tpose.v = false
+          return "The native rest-pose hook is unavailable in this game build"
+        end
       end },
   })
 end

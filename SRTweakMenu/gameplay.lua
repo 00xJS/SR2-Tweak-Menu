@@ -238,7 +238,14 @@ function M.setup(features)
       function(rec) hold("harder_hits", rec + 0x228, "f32", read_f32(rec + 0x228) * 8) end),
     blast_row("rocket_ammo", "Rocket ammo", "The gun in your hand blows up what it hits, like a rocket. Experimental. The blast can hurt you up close.",
       "rpg_launcher"),
-    blast_row("fire_ammo", "Fire ammo", "What the gun in your hand hits catches fire, like a molotov. Experimental.", "molotov"),
+    { id = "fire_ammo", label = "Fire ammo", kind = "toggle",
+      help = "People damaged by your weapon catch fire.",
+      change = function()
+        if F.items.fire_ammo.v and (not wml.fire_hits or wml.fire_hits(false) == nil) then
+          F.items.fire_ammo.v = false
+          return "Native weapon damage events are unavailable in this game build"
+        end
+      end },
     blast_row("explosive_punch", "Explosive melee", "Hits with the melee weapon in your hand blow up whoever or whatever you hit. Experimental.",
       function() return PUNCH_BLAST[F.items.punch_blast.v][1] end),
     { id = "punch_blast", label = "Melee blast", kind = "choice", needs = "none", options = { "Small", "Grenade", "Rocket", "Huge" }, v = 2,
@@ -359,8 +366,11 @@ function M.setup(features)
 
   F.add_rows("Visual", nil, {
     { id = "freeze_world", label = "Freeze world", kind = "toggle", needs = "none",
-      help = "People, cars and time stand still. The free camera still moves.",
-      update = function() hold("freeze_world", 0x00E8438C, "f32", 1000.0) end,
+      help = "Pauses the world while the menu or the free camera is in use (as SR1's Freeze World).",
+      update = function()
+        local FC = require("freecam")
+        if F.menu_open() or FC.flying() then hold("freeze_world", 0x00E8438C, "f32", 1000.0) else release("freeze_world") end
+      end,
       off = function() release("freeze_world") end },
   })
 
@@ -379,6 +389,31 @@ function M.setup(features)
     resist_row("reward_crashproof", "Crash-proof", 2, "Being hit by vehicles"),
     resist_row("reward_fireproof", "Fireproof", 3, "Fire"),
   })
+  -- Fire ammo uses the same configured damage per second and burn update
+  -- as native fire. 0x98E2A0 selects these tuning values; 0x54D451 names
+  -- the single-player value Fire_Damage_Per_second. The ignition argument
+  -- is DPS, not duration. Do not add a second, guessed health drain.
+  local function lookup(handle)
+    local victim = read_u32(0x02149C64 + (handle & 0xFFF) * 16)
+    if victim ~= 0 and read_u32(victim + 0x44) == handle then return victim end
+  end
+  F.after_updates[#F.after_updates + 1] = function(p)
+    if not wml.fire_hits then return end
+    local enabled = p ~= 0 and F.on("fire_ammo") and not F.menu_open()
+    for _, handle in ipairs(wml.fire_hits(enabled) or {}) do
+      local victim = lookup(handle)
+      if enabled and victim and victim ~= p
+        and read_u32(victim + 0x4C) == 1 and read_f32(victim + 0x1124) > 0
+        and (read_u32(victim + 0xC0) & 0x400) == 0 then
+        local address = 0x0279748C
+        if read_u8(0x02528B48) == 1 and read_u8(0x02528B49) == 0 then address = 0x0279749C end
+        local dps = read_f32(address)
+        if dps == dps and dps > 0 and dps < math.huge then
+          wml.callx(0x0098D3C0, { ecx = p }, victim, wml.f2u(dps), 0, 0, 0)
+        end
+      end
+    end
+  end
 end
 
 return M

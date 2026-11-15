@@ -122,7 +122,7 @@ static int l_read(lua_State *s, int n)
 {
     uint32_t a = check_addr(s, 1), v = 0;
     if (in_mailbox(a, n)) { lua_pushinteger(s, mailbox_get(a, n)); return 1; }
-    if (!mem_read(a, &v, n)) return luaL_error(s, "bad read at %08X", a);
+    if (!mem_read(a, &v, n)) return luaL_error(s, "bad read at %p", (void *)(uintptr_t)(a));
     lua_pushinteger(s, v);
     return 1;
 }
@@ -132,7 +132,7 @@ static int l_read_u32(lua_State *s) { return l_read(s, 4); }
 static int l_read_f32(lua_State *s)
 {
     uint32_t a = check_addr(s, 1); float f;
-    if (!mem_read(a, &f, 4)) return luaL_error(s, "bad read at %08X", a);
+    if (!mem_read(a, &f, 4)) return luaL_error(s, "bad read at %p", (void *)(uintptr_t)(a));
     lua_pushnumber(s, f);
     return 1;
 }
@@ -140,7 +140,7 @@ static int l_write(lua_State *s, int n)
 {
     uint32_t a = check_addr(s, 1), v = (uint32_t)luaL_checkinteger(s, 2);
     if (in_mailbox(a, n)) { mailbox_set(a, n, v); return 0; }
-    if (!mem_write(a, &v, n)) return luaL_error(s, "bad write at %08X", a);
+    if (!mem_write(a, &v, n)) return luaL_error(s, "bad write at %p", (void *)(uintptr_t)(a));
     return 0;
 }
 static int l_write_u8(lua_State *s)  { return l_write(s, 1); }
@@ -149,7 +149,7 @@ static int l_write_u32(lua_State *s) { return l_write(s, 4); }
 static int l_write_f32(lua_State *s)
 {
     uint32_t a = check_addr(s, 1); float f = (float)luaL_checknumber(s, 2);
-    if (!mem_write(a, &f, 4)) return luaL_error(s, "bad write at %08X", a);
+    if (!mem_write(a, &f, 4)) return luaL_error(s, "bad write at %p", (void *)(uintptr_t)(a));
     return 0;
 }
 static int l_f2u(lua_State *s) { float f = (float)luaL_checknumber(s, 1); uint32_t u; memcpy(&u, &f, 4); lua_pushinteger(s, u); return 1; }
@@ -263,7 +263,7 @@ static int game_dostring(void *state, const char *code)
     g_last_status = status & 0xFF;
     return 1;
 }
-// Returns: true if it ran (false: no such state yet), then every value the
+// Returns: true if it finished successfully (false: missing state or Lua error), then every value the
 // code passed to tweak_out.
 static int run_in(lua_State *s, uint32_t state_ptr)
 {
@@ -274,7 +274,8 @@ static int run_in(lua_State *s, uint32_t state_ptr)
     int r = game_dostring(*(void **)state_ptr, code);
     if (r < 0) return luaL_error(s, "the game crashed running: %s", code);
     if (g_last_status) logf("game Lua (%s) status %d running: %.200s", state_ptr == VINT_STATE_PTR ? "vint" : "game", g_last_status, code);
-    lua_pushboolean(s, r == 1);
+    if (g_last_status) g_out_n = 0;  // never publish partial results from a failed native chunk
+    lua_pushboolean(s, r == 1 && g_last_status == 0);
     int n = g_out_n;
     luaL_checkstack(s, n, "too many results");
     for (int i = 0; i < n; i++) {
@@ -313,7 +314,7 @@ static int l_call(lua_State *s)
     int n = lua_gettop(s) - 1;
     if (n > 8) return luaL_error(s, "call: at most 8 arguments");
     for (int i = 0; i < n; i++) a[i] = (uint32_t)luaL_checkinteger(s, i + 2);
-    if (!call_guarded(fn, a, &r)) return luaL_error(s, "call %08X crashed", fn);
+    if (!call_guarded(fn, a, &r)) return luaL_error(s, "call %p crashed", (void *)(uintptr_t)(fn));
     lua_pushinteger(s, r);
     return 1;
 }
@@ -371,7 +372,7 @@ static int l_callx(lua_State *s)
     if (n > 8) return luaL_error(s, "callx: at most 8 stack arguments");
     cx_n = (uint32_t)n;
     for (int i = 0; i < n; i++) cx_args[i] = (uint32_t)luaL_checkinteger(s, i + 3);
-    if (!callx_guarded()) return luaL_error(s, "callx %08X crashed", cx_fn);
+    if (!callx_guarded()) return luaL_error(s, "callx %p crashed", (void *)(uintptr_t)(cx_fn));
     lua_pushinteger(s, cx_ret);
     return 1;
 }
@@ -399,11 +400,11 @@ static int l_patch(lua_State *s)
     uint32_t a = check_addr(s, 1);
     size_t n; const char *b = luaL_checklstring(s, 2, &n);
     DWORD old;
-    if (!VirtualProtect((void *)(uintptr_t)a, n, PAGE_EXECUTE_READWRITE, &old)) return luaL_error(s, "patch: can't unprotect %08X", a);
+    if (!VirtualProtect((void *)(uintptr_t)a, n, PAGE_EXECUTE_READWRITE, &old)) return luaL_error(s, "patch: can't unprotect %p", (void *)(uintptr_t)(a));
     int ok = mem_write(a, b, (uint32_t)n);
     VirtualProtect((void *)(uintptr_t)a, n, old, &old);
     FlushInstructionCache(GetCurrentProcess(), (void *)(uintptr_t)a, n);
-    if (!ok) return luaL_error(s, "patch: bad write at %08X", a);
+    if (!ok) return luaL_error(s, "patch: bad write at %p", (void *)(uintptr_t)(a));
     return 0;
 }
 // read_string(addr [, max]): a zero-terminated string from the game.
@@ -414,7 +415,7 @@ static int l_read_string(lua_State *s)
     char buf[1024];
     if (max > 1023) max = 1023;
     int n = 0;
-    for (; n < max; n++) { if (!mem_read(a + n, &buf[n], 1)) return luaL_error(s, "bad read at %08X", a + n); if (!buf[n]) break; }
+    for (; n < max; n++) { if (!mem_read(a + n, &buf[n], 1)) return luaL_error(s, "bad read at %p", (void *)(uintptr_t)(a + n)); if (!buf[n]) break; }
     buf[n] = 0;
     lua_pushstring(s, buf);
     return 1;
@@ -492,12 +493,94 @@ static int l_take_key(lua_State *s)
 }
 static int l_noop(lua_State *s) { (void)s; return 0; }
 
-// Controller 1 through XInput: buttons, left trigger, right trigger (or nil).
+// Controller 1. The game reads its pads through XINPUT1_3's XInputGetState
+// (imported by ordinal 2; with Juiced Patch that import leads to Juiced's
+// SDL pads, so every kind of controller arrives as an Xbox one). The import
+// is wrapped (hook_pad_import): what the game reads for pad 1 is kept for
+// the menu, and while the menu has the controller the game gets nothing
+// (or the buttons the menu hides) - SR1's menu does the same through its
+// controller hook. Without that read (no wrap), XInput is asked directly.
 typedef struct { DWORD packet; WORD buttons; BYTE lt, rt; SHORT lx, ly, rx, ry; } xstate_t;
 typedef DWORD (WINAPI *xget_t)(DWORD, xstate_t *);
-static xget_t g_xget;
+static xget_t g_xget, g_xget_game;
+static xstate_t g_pad_seen;
+static volatile DWORD g_pad_seen_at;
+static volatile LONG g_pad_reads, g_polls;
+static volatile LONG g_xinput_snapshot;
+// Set by the menu each frame (wml.pad_filter): everything hidden, or these
+// bits (PAD bits: buttons, 0x10000 LT, 0x20000 RT); and the open combo,
+// whose last button is hidden while the ones held for it are down.
+static volatile LONG g_pad_all;
+static volatile LONG g_grab_remap, g_menu_capture;
+static volatile DWORD g_pad_hide, g_combo_hold, g_combo_press;
+// A press handed back to the game (wml.pad_inject): a short tap of a button
+// the menu held back until it knew it was a tap.
+static volatile DWORD g_pad_add;
+static volatile LONG g_pad_add_reads;
+
+static DWORD WINAPI my_xget(DWORD user, xstate_t *st)
+{
+    DWORD r = g_xget_game(user, st);
+    if (user != 0 || r != 0 || !st) return r;
+    g_pad_seen = *st;
+    InterlockedExchange(&g_xinput_snapshot, 1);
+    g_pad_seen_at = GetTickCount();
+    InterlockedIncrement(&g_pad_reads);
+    if (g_pad_all) {
+        st->buttons = 0; st->lt = st->rt = 0; st->lx = st->ly = st->rx = st->ry = 0;
+        return r;
+    }
+    DWORD hide = g_pad_hide;
+    if (g_combo_hold && (st->buttons & g_combo_hold) == g_combo_hold) hide |= g_combo_press;
+    st->buttons &= (WORD)~hide;
+    if (hide & 0x10000) st->lt = 0;
+    if (hide & 0x20000) st->rt = 0;
+    if (g_pad_add_reads > 0) { st->buttons |= (WORD)g_pad_add; InterlockedDecrement(&g_pad_add_reads); }
+    return r;
+}
+// The import slot of XINPUT1_3 ordinal 2 (XInputGetState) in SR2_pc.exe.
+static void **xinput_import_slot(void)
+{
+    uint8_t *base = (uint8_t *)GetModuleHandleA(NULL);
+    IMAGE_NT_HEADERS *nt = (IMAGE_NT_HEADERS *)(base + ((IMAGE_DOS_HEADER *)base)->e_lfanew);
+    IMAGE_DATA_DIRECTORY dir = nt->OptionalHeader.DataDirectory[IMAGE_DIRECTORY_ENTRY_IMPORT];
+    if (!dir.VirtualAddress) return NULL;
+    for (IMAGE_IMPORT_DESCRIPTOR *d = (IMAGE_IMPORT_DESCRIPTOR *)(base + dir.VirtualAddress); d->Name; d++) {
+        if (_strnicmp((char *)(base + d->Name), "xinput", 6)) continue;
+        IMAGE_THUNK_DATA *names = (IMAGE_THUNK_DATA *)(base + (d->OriginalFirstThunk ? d->OriginalFirstThunk : d->FirstThunk));
+        IMAGE_THUNK_DATA *slots = (IMAGE_THUNK_DATA *)(base + d->FirstThunk);
+        for (; names->u1.AddressOfData; names++, slots++) {
+            if (IMAGE_SNAP_BY_ORDINAL(names->u1.Ordinal)) {
+                if (IMAGE_ORDINAL(names->u1.Ordinal) == 2) return (void **)&slots->u1.Function;
+            } else if (!strcmp((char *)((IMAGE_IMPORT_BY_NAME *)(base + names->u1.AddressOfData))->Name, "XInputGetState")) {
+                return (void **)&slots->u1.Function;
+            }
+        }
+    }
+    return NULL;
+}
+static void hook_pad_import(void)
+{
+    void **slot = xinput_import_slot();
+    if (!slot || !*slot) { logf("no XInputGetState import found; the menu can't keep the controller from the game"); return; }
+    if (*slot == (void *)my_xget) return;
+    DWORD old;
+    if (!VirtualProtect(slot, sizeof *slot, PAGE_READWRITE, &old)) { logf("couldn't unprotect the XInputGetState import"); return; }
+    g_xget_game = (xget_t)*slot;
+    *slot = (void *)my_xget;
+    VirtualProtect(slot, sizeof *slot, old, &old);
+    logf("controller: XInputGetState import at %p wrapped (it went to %p)", (void *)slot, (void *)g_xget_game);
+}
+
 static int l_pad(lua_State *s)
 {
+    // What the game polled in the last half second, if its poll comes through a wrap.
+    if ((g_polls > 0 || (g_xget_game && g_pad_reads > 0)) && GetTickCount() - g_pad_seen_at < 500) {
+        if (!game_focused()) return 0;
+        xstate_t st = g_pad_seen;
+        lua_pushinteger(s, st.buttons); lua_pushinteger(s, st.lt); lua_pushinteger(s, st.rt);
+        return 3;
+    }
     static int tried;
     if (!tried) {
         tried = 1;
@@ -509,6 +592,355 @@ static int l_pad(lua_State *s)
     if (!g_xget || g_xget(0, &st) != 0 || !game_focused()) return 0;
     lua_pushinteger(s, st.buttons); lua_pushinteger(s, st.lt); lua_pushinteger(s, st.rt);
     return 3;
+}
+// The game's own poll of its pad device (one device, the global 0x023478A8):
+// main pad poll 0x00C147D5 calls 0x00C13C80 (XInput) or, at 0x00C147DC,
+// 0x00C141D0 (other pads); with Juiced Patch the pad arrives through
+// Juiced (SDL) in the same device. After the poll the device holds one
+// byte per button at [dev+0xF68] (0x80 down; [dev+0xF64] of them), mirrored
+// to 0x02349808 (1 down): 0-3 A B X Y, 4-5 LB RB, 6-7 Back Start, 8-9 LS RS,
+// 0xA-0xB LT RT (0-127), 0x10-0x13 D-pad right up left down; the sticks are
+// floats at +0xD4C/+0xD50 and +0xD0C/+0xD10. Both calls are wrapped: the
+// menu gets the pad as polled, then what it holds back is cleared before
+// the game uses it.
+#define PAD_DEV          0x023478A8
+#define PAD_POLL_SITE_X  0x00C147D5
+#define PAD_POLL_SITE_D  0x00C147DC
+#define PAD_MIRROR       0x02349808
+static uint32_t g_poll_prev_x, g_poll_prev_d;
+static volatile LONG g_poll_hooks;      // polls seen through the call-site wraps
+static volatile LONG g_polled_now;      // this update's poll came through them (its copy is the menu's)
+static volatile LONG g_injected_now;    // buttons this poll put down for the game itself (wml.pad_inject)
+static float g_sticks_poll[4];
+static const struct { WORD bit; BYTE idx; } PADMAP[] = {
+    { 0x1000, 0 }, { 0x2000, 1 }, { 0x4000, 2 }, { 0x8000, 3 }, { 0x0100, 4 }, { 0x0200, 5 },
+    { 0x0020, 6 }, { 0x0010, 7 }, { 0x0040, 8 }, { 0x0080, 9 },
+    { 0x0008, 0x10 }, { 0x0001, 0x11 }, { 0x0004, 0x12 }, { 0x0002, 0x13 },
+};
+static void remap_grab_buttons(uint8_t *buttons, uint8_t *mirror, WORD raw)
+{
+    if (!g_grab_remap || g_menu_capture || g_pad_all || (g_pad_hide & 0x8000)) return;
+    buttons[3] = mirror[3] = 0;
+    if (raw & 0x8000) { buttons[4] = 0x80; mirror[4] = 1; }
+}
+static void __cdecl after_pad_poll(uint8_t *dev)
+{
+    __try {
+        uint8_t *b = *(uint8_t **)(dev + 0xF68);
+        uint32_t n = *(uint32_t *)(dev + 0xF64);
+        uint8_t *mirror = (uint8_t *)PAD_MIRROR;
+        // (Juiced Patch's device counts 12 buttons; the D-pad is at 0x10-0x13 past them)
+        if (!b || n < 12 || n > 64) return;
+        uint32_t nb = n < 0x14 ? 0x14 : n;
+        WORD buttons = 0;
+        for (int i = 0; i < (int)(sizeof PADMAP / sizeof *PADMAP); i++) if (b[PADMAP[i].idx]) buttons |= PADMAP[i].bit;
+        int raw_xinput = InterlockedExchange(&g_xinput_snapshot, 0);
+        if (raw_xinput) buttons = g_pad_seen.buttons;
+        // The menu's copy, as polled - before anything is held back, and before
+        // the game turns the buttons into its actions (later in the update).
+        g_pad_seen.buttons = buttons;
+        if (!raw_xinput) {
+            g_pad_seen.lt = (BYTE)(b[0xA] > 127 ? 255 : b[0xA] * 2);
+            g_pad_seen.rt = (BYTE)(b[0xB] > 127 ? 255 : b[0xB] * 2);
+        }
+        g_pad_seen_at = GetTickCount();
+        g_sticks_poll[0] = *(float *)(dev + 0xD0C); g_sticks_poll[1] = *(float *)(dev + 0xD10);
+        g_sticks_poll[2] = *(float *)(dev + 0xD4C); g_sticks_poll[3] = *(float *)(dev + 0xD50);
+        InterlockedIncrement(&g_poll_hooks);
+        g_polled_now = 1;
+        if (g_pad_all || (g_combo_hold && (buttons & g_combo_hold) == g_combo_hold && (buttons & g_combo_press))) {
+            for (uint32_t i = 0; i < nb; i++) { b[i] = 0; mirror[i] = 0; }
+            *(float *)(dev + 0xD4C) = 0; *(float *)(dev + 0xD50) = 0;
+            *(float *)(dev + 0xD0C) = 0; *(float *)(dev + 0xD10) = 0;
+        } else {
+            DWORD hide = g_pad_hide;   // (the combo's last button is held back above, with everything)
+            if (g_combo_hold && (buttons & g_combo_hold) == g_combo_hold) hide |= g_combo_press;
+            for (int i = 0; i < (int)(sizeof PADMAP / sizeof *PADMAP); i++)
+                if (hide & PADMAP[i].bit) { b[PADMAP[i].idx] = 0; mirror[PADMAP[i].idx] = 0; }
+            if (hide & 0x10000) { b[0xA] = 0; mirror[0xA] = 0; }
+            if (hide & 0x20000) { b[0xB] = 0; mirror[0xB] = 0; }
+        }
+        if (g_pad_add_reads > 0) {
+            for (int i = 0; i < (int)(sizeof PADMAP / sizeof *PADMAP); i++)
+                if (g_pad_add & PADMAP[i].bit) { b[PADMAP[i].idx] = 0x80; mirror[PADMAP[i].idx] = 1; }
+            InterlockedExchange(&g_injected_now, (LONG)g_pad_add);
+            InterlockedDecrement(&g_pad_add_reads);
+        }
+        remap_grab_buttons(b, mirror, buttons);
+    } __except (EXCEPTION_EXECUTE_HANDLER) {}
+}
+// After the game's whole input update (0x00C063D0, the per-frame call we
+// hook): whoever polled the pad (the game, or Juiced Patch's SDL in place
+// of 0x00C13C80), the device holds this frame's buttons. The menu's copy is
+// taken, then - while the menu has the pad, or the open combo is down - the
+// game's own "drop all input" (0x0075C700, eax = device: every one of its 87
+// actions and 8 axes back to rest, what the game does itself when its input
+// is blocked) runs, and the button bytes are cleared, so nothing reaches the
+// game's controls this frame.
+#define PAD_CLEAR_ALL 0x0075C700
+static volatile LONG g_updates, g_update_blocks, g_update_leaks;
+static float g_sticks[4];   // the device's stick floats as the game polled them (before any blocking)
+static void pad_clear_all(void)
+{
+    __asm {
+        pushad
+        mov eax, PAD_DEV
+        mov edx, PAD_CLEAR_ALL
+        call edx
+        popad
+    }
+}
+static void __cdecl after_input_update(void)
+{
+    __try {
+        uint8_t *dev = (uint8_t *)PAD_DEV;
+        uint8_t *b = *(uint8_t **)(dev + 0xF68);
+        uint32_t n = *(uint32_t *)(dev + 0xF64);
+        uint8_t *mirror = (uint8_t *)PAD_MIRROR;
+        InterlockedIncrement(&g_updates);
+        // (Juiced Patch's device counts 12 buttons; the D-pad bytes are at
+        // 0x10-0x13 past them either way)
+        if (!b || n < 12 || n > 64) return;
+        uint32_t nb = n < 0x14 ? 0x14 : n;
+        WORD buttons = 0;
+        int polled = g_polled_now;
+        g_polled_now = 0;
+        if (polled || g_poll_hooks > 0) {
+            // The poll's copy. When an update comes without a poll, keep the
+            // last poll's copy: rebuilding it from the bytes would read what
+            // we held back as released, and the menu saw a held LB let go and
+            // pressed again (the kick fired twice, the second time mid-kick).
+            buttons = g_pad_seen.buttons;
+        } else {
+            for (int i = 0; i < (int)(sizeof PADMAP / sizeof *PADMAP); i++) if (b[PADMAP[i].idx]) buttons |= PADMAP[i].bit;
+            g_pad_seen.buttons = buttons;
+            g_pad_seen.lt = (BYTE)(b[0xA] > 127 ? 255 : b[0xA] * 2);
+            g_pad_seen.rt = (BYTE)(b[0xB] > 127 ? 255 : b[0xB] * 2);
+            g_pad_seen_at = GetTickCount();
+        }
+        InterlockedIncrement(&g_polls);
+        int combo = g_combo_hold && (buttons & g_combo_hold) == g_combo_hold && (buttons & g_combo_press);
+        if (polled) { for (int i = 0; i < 4; i++) g_sticks[i] = g_sticks_poll[i]; }
+        else {
+            g_sticks[0] = *(float *)(dev + 0xD0C); g_sticks[1] = *(float *)(dev + 0xD10);
+            g_sticks[2] = *(float *)(dev + 0xD4C); g_sticks[3] = *(float *)(dev + 0xD50);
+        }
+        if (g_pad_all || combo) {
+            for (uint32_t i = 0; i < nb; i++) { b[i] = 0; mirror[i] = 0; }
+            *(float *)(dev + 0xD4C) = 0; *(float *)(dev + 0xD50) = 0;
+            *(float *)(dev + 0xD0C) = 0; *(float *)(dev + 0xD10) = 0;
+            pad_clear_all();
+            InterlockedIncrement(&g_update_blocks);
+        } else if (g_pad_hide) {
+            // The hard lock. A held-back button is cleared at the poll, before
+            // the game makes its actions from it - when the poll comes through
+            // our wrap. When it doesn't (Juiced Patch's own poll, or a press
+            // that landed between the poll and this update), the button is
+            // still down here and the game has already turned it into an
+            // action (a D-pad taunt while the menu scrolls, the grab under the
+            // LB kick). Then every action is dropped for this update, as when
+            // the menu has the whole pad: nothing held back ever gets through.
+            // (Not a leak: what we put there ourselves - a tap handed back to
+            // the game, and LB standing in for Y while the kick has LB.)
+            DWORD ours = (DWORD)InterlockedExchange(&g_injected_now, 0);
+            if (g_grab_remap && !g_menu_capture && !(g_pad_hide & 0x8000) && (buttons & 0x8000)) ours |= 0x0100;
+            int leaked = 0;
+            // The D-pad (taunt, compliment...) has no byte on Juiced Patch's
+            // device (12 buttons, no 0x10-0x13): it reaches the game another
+            // way, so no byte check sees it. Held back and down = drop every
+            // action this update.
+            if (buttons & g_pad_hide & 0x000F) leaked = 1;
+            for (int i = 0; i < (int)(sizeof PADMAP / sizeof *PADMAP); i++)
+                if (g_pad_hide & PADMAP[i].bit) {
+                    if ((b[PADMAP[i].idx] || mirror[PADMAP[i].idx]) && !(ours & PADMAP[i].bit)) leaked = 1;
+                    b[PADMAP[i].idx] = 0; mirror[PADMAP[i].idx] = 0;
+                }
+            if (g_pad_hide & 0x10000) { if (b[0xA] > 24) leaked = 1; b[0xA] = 0; mirror[0xA] = 0; }
+            if (g_pad_hide & 0x20000) { if (b[0xB] > 24) leaked = 1; b[0xB] = 0; mirror[0xB] = 0; }
+            if (leaked) {
+                pad_clear_all();
+                InterlockedIncrement(&g_update_leaks);
+            }
+        }
+        if (!combo) remap_grab_buttons(b, mirror, buttons);
+        // Evidence for the missing charged attack (both triggers held): after
+        // a hold of about half a second, once per hold, what the pad gave and
+        // what the game is left with after the menu's filter.
+        {
+            static int held, told;
+            int both = g_pad_seen.lt > 128 && g_pad_seen.rt > 128;
+            held = both ? held + 1 : 0;
+            if (!both) told = 0;
+            if (held == 30 && !told) {
+                told = 1;
+                logf("charge hold: pad LT %u RT %u; game sees LT %u RT %u (mirror %u %u); hide %08lX all %ld combo %d menu %ld remap %ld",
+                    g_pad_seen.lt, g_pad_seen.rt, b[0xA], b[0xB], mirror[0xA], mirror[0xB],
+                    (unsigned long)g_pad_hide, (long)g_pad_all, combo, (long)g_menu_capture, (long)g_grab_remap);
+            }
+        }
+    } __except (EXCEPTION_EXECUTE_HANDLER) {}
+}
+// sticks(): left x, y and right x, y, -1..1. From XInput when an Xbox pad
+// answers (its layout is known), else the device's floats as polled.
+static int l_sticks(lua_State *s)
+{
+    if (!g_xget) {
+        static int tried;
+        if (!tried) {
+            tried = 1;
+            HMODULE x = LoadLibraryA("xinput1_4.dll");
+            if (!x) x = LoadLibraryA("xinput1_3.dll");
+            if (x) g_xget = (xget_t)GetProcAddress(x, "XInputGetState");
+        }
+    }
+    xstate_t st;
+    if (g_xget && g_xget(0, &st) == 0 && game_focused()) {
+        lua_pushnumber(s, st.lx / 32767.0); lua_pushnumber(s, st.ly / 32767.0);
+        lua_pushnumber(s, st.rx / 32767.0); lua_pushnumber(s, st.ry / 32767.0);
+        lua_pushstring(s, "xinput");
+        return 5;
+    }
+    for (int i = 0; i < 4; i++) lua_pushnumber(s, g_sticks[i]);
+    lua_pushstring(s, "device");
+    return 5;
+}
+// pad_debug(): updates seen, of them with a pad device, of them blocked,
+// the device's button count, polls through the wrap, and updates where a
+// held-back button was still down afterwards (the hard lock dropped it).
+static int l_pad_debug(lua_State *s)
+{
+    lua_pushinteger(s, g_updates); lua_pushinteger(s, g_polls); lua_pushinteger(s, g_update_blocks);
+    lua_pushinteger(s, *(uint32_t *)(PAD_DEV + 0xF64));
+    lua_pushinteger(s, g_poll_hooks);
+    lua_pushinteger(s, g_update_leaks);   // held-back buttons found down after the update (all actions dropped)
+    return 6;
+}
+
+static __declspec(naked) void pad_poll_thunk_x(void)
+{
+    __asm {
+        push dword ptr [esp + 4]
+        call dword ptr [g_poll_prev_x]
+        add esp, 4
+        pushad
+        pushfd
+        push dword ptr [esp + 40]
+        call after_pad_poll
+        add esp, 4
+        popfd
+        popad
+        ret
+    }
+}
+static __declspec(naked) void pad_poll_thunk_d(void)
+{
+    __asm {
+        push dword ptr [esp + 4]
+        call dword ptr [g_poll_prev_d]
+        add esp, 4
+        pushad
+        pushfd
+        push dword ptr [esp + 40]
+        call after_pad_poll
+        add esp, 4
+        popfd
+        popad
+        ret
+    }
+}
+
+// pad_filter(all, hide, combo_hold, combo_press): what the game doesn't see
+// of controller 1 from now on (see my_xget).
+static int l_pad_filter(lua_State *s)
+{
+    g_pad_all = g_menu_capture || lua_toboolean(s, 1);
+    g_pad_hide = (DWORD)luaL_optinteger(s, 2, 0);
+    g_combo_hold = (DWORD)luaL_optinteger(s, 3, 0);
+    g_combo_press = (DWORD)luaL_optinteger(s, 4, 0);
+    return 0;
+}
+static int l_menu_capture(lua_State *s)
+{
+    InterlockedExchange(&g_menu_capture, lua_toboolean(s, 1));
+    if (g_menu_capture) { g_pad_hide |= 0x3FFFF; g_pad_all = 1; }
+    if (!g_menu_capture) g_pad_all = 0;
+    return 0;
+}
+static int l_grab_remap(lua_State *s)
+{
+    InterlockedExchange(&g_grab_remap, lua_toboolean(s, 1));
+    return 0;
+}
+// pad_inject(bits, reads): the game sees these buttons down for its next
+// `reads` reads of controller 1.
+static int l_pad_inject(lua_State *s)
+{
+    g_pad_add = (DWORD)luaL_checkinteger(s, 1) & 0xFFFF;
+    g_pad_add_reads = (LONG)luaL_optinteger(s, 2, 4);
+    return 0;
+}
+// pad_source(): "game" when the game's own controller reads come through
+// the wrap (so the menu can keep the controller from it), else "xinput".
+static int l_pad_source(lua_State *s)
+{
+    lua_pushstring(s, (g_polls > 0 || (g_xget_game && g_pad_reads > 0)) ? "game" : "xinput");
+    return 1;
+}
+
+// ------------------------------------------------------------------ field of view
+// The game's camera field of view getter (0x00494080, three callers: the
+// camera, the renderer's setup and cutscenes) is wrapped, whatever it is by
+// then (the game's own, or Juiced Patch's FOVMultiplier / FixUltrawideFOV
+// hook on it), and its result multiplied by the menu's factor
+// (wml.set_fov). The menu's rows used to patch an instruction inside it,
+// which Juiced also changes.
+#define FOV_GETTER 0x00494080
+static const uint8_t FOV_GETTER_BYTES[8] = { 0x51, 0x80, 0x3D, 0x14, 0x7D, 0x52, 0x02, 0x00 };
+static float g_fov_mult = 1.0f;
+static uint8_t *g_fov_tramp;
+static int g_fov_hooked;
+static __declspec(naked) void fov_thunk(void)
+{
+    __asm {
+        call dword ptr [g_fov_tramp]
+        fmul dword ptr [g_fov_mult]
+        ret
+    }
+}
+static void hook_fov(void)
+{
+    uint8_t *site = (uint8_t *)FOV_GETTER;
+    g_fov_tramp = (uint8_t *)VirtualAlloc(NULL, 64, MEM_COMMIT | MEM_RESERVE, PAGE_EXECUTE_READWRITE);
+    if (!g_fov_tramp) return;
+    if (site[0] == 0xE9) {
+        // Already a jump (another hook): ours goes first and calls on to it.
+        uint32_t target = (uint32_t)(uintptr_t)site + 5 + *(int32_t *)(site + 1);
+        g_fov_tramp[0] = 0xE9;
+        *(int32_t *)(g_fov_tramp + 1) = (int32_t)(target - ((uint32_t)(uintptr_t)g_fov_tramp + 5));
+    } else if (!memcmp(site, FOV_GETTER_BYTES, 8)) {
+        memcpy(g_fov_tramp, site, 8);
+        g_fov_tramp[8] = 0xE9;
+        *(int32_t *)(g_fov_tramp + 9) = (int32_t)(((uint32_t)FOV_GETTER + 8) - ((uint32_t)(uintptr_t)g_fov_tramp + 13));
+    } else {
+        logf("field of view: the getter at %08X isn't as expected (%02X %02X %02X); field of view rows off", FOV_GETTER, site[0], site[1], site[2]);
+        return;
+    }
+    DWORD old;
+    if (!VirtualProtect(site, 5, PAGE_EXECUTE_READWRITE, &old)) return;
+    site[0] = 0xE9;
+    *(int32_t *)(site + 1) = (int32_t)((uint32_t)(uintptr_t)fov_thunk - ((uint32_t)FOV_GETTER + 5));
+    VirtualProtect(site, 5, old, &old);
+    FlushInstructionCache(GetCurrentProcess(), site, 5);
+    g_fov_hooked = 1;
+    logf("field of view: getter %08X wrapped", FOV_GETTER);
+}
+static int l_set_fov(lua_State *s)
+{
+    float m = (float)luaL_checknumber(s, 1);
+    if (!(m > 0.05f && m < 5.0f)) m = 1.0f;
+    g_fov_mult = m;
+    lua_pushboolean(s, g_fov_hooked);
+    return 1;
 }
 
 // ------------------------------------------------------------------ settings, log, callbacks
@@ -554,8 +986,301 @@ static int l_on_frame(lua_State *s)
 }
 static int l_hook(lua_State *s)
 {
-    return luaL_error(s, "wml.hook isn't available on Saints Row 2 yet (address %08X)", (uint32_t)luaL_optinteger(s, 1, 0));
+    return luaL_error(s, "wml.hook isn't available on Saints Row 2 yet (address %p)", (void *)(uintptr_t)((uint32_t)luaL_optinteger(s, 1, 0)));
 }
+
+// Count native gun discharges, including the automatic loop and infinite ammo.
+// Capture player-caused weapon damage for the next update, after reactions run.
+static volatile LONG g_shot_watch, g_fire_watch, g_shots;
+static volatile LONG g_fire_lock;
+static uint32_t g_fire_victims[32];
+static unsigned g_fire_count;
+static uint32_t g_discharge_resume = 0x009BE6F6;
+static uint32_t g_damage_resume = 0x009847A6;
+static int g_discharge_hook, g_damage_hook;
+static volatile LONG g_block_idle, g_rest_pose;
+static uint32_t g_idle_resume = 0x0096FCA6;
+static int g_idle_hook, g_pose_hook;
+typedef uint32_t (__stdcall *pose_combine_t)(uint32_t, uint32_t, uint32_t);
+static pose_combine_t g_pose_original;
+
+static __declspec(naked) void idle_thunk(void)
+{
+    __asm {
+        pushfd
+        cmp dword ptr [g_block_idle], 0
+        je original
+        cmp ecx, dword ptr ds:[021703D4h]
+        jne original
+        push eax
+        mov eax, [esp + 12]
+        cmp eax, 539h
+        jae keep
+        imul eax, 12
+        test byte ptr [eax + 0E90E48h], 4
+        jnz block
+        mov eax, [eax + 0E90E40h]
+        test eax, eax
+        jz keep
+        cmp dword ptr [eax], 656C6469h  // "idle"
+        jne keep
+        cmp byte ptr [eax + 4], 20h
+        jne keep
+    block:
+        pop eax
+        popfd
+        xor eax, eax
+        ret
+    keep:
+        pop eax
+    original:
+        popfd
+        sub esp, 52Ch
+        jmp dword ptr [g_idle_resume]
+    }
+}
+
+typedef struct {
+    uint32_t local_matrix[128][12];
+    uint32_t flags[128];
+    uint32_t matrices, flag_array, count;
+} rest_snapshot_t;
+
+// BEGIN verified neutral rig math (also compiled by offline tests).
+static int neutral_rest_matrix(const float parent[12], const float parent_bind[3],
+                               const float child_bind[3], float output[12])
+{
+    float delta[3];
+    for (int axis = 0; axis < 3; ++axis) {
+        delta[axis] = parent_bind[axis] - child_bind[axis];
+        if (delta[axis] != delta[axis] || delta[axis] < -10000.0f || delta[axis] > 10000.0f) return 0;
+    }
+    memcpy(output, parent, 9 * sizeof(float));
+    for (int axis = 0; axis < 3; ++axis) {
+        float value = parent[9 + axis] + parent[axis] * delta[0]
+                    + parent[3 + axis] * delta[1] + parent[6 + axis] * delta[2];
+        if (value != value || value < -10000000.0f || value > 10000000.0f) return 0;
+        output[9 + axis] = value;
+    }
+    return 1;
+}
+// END verified neutral rig math.
+
+static int save_rest_pose(uint32_t animator, rest_snapshot_t *saved)
+{
+    if (!g_rest_pose) return 0;
+    __try {
+        uint32_t p = *(uint32_t *)0x021703D4;
+        if (!p || *(uint8_t *)(p + 0x595) || *(uint32_t *)(p + 0x18D4)) return 0;
+        uint32_t owner = *(uint32_t *)(p + 0x5E0);
+        if (!owner || owner == 0xFFFFFFFF) return 0;
+        uint32_t id = *(uint32_t *)owner;
+        if (id >= 0x80000000 || animator != 0x0340D240 + (id % 190) * 0x5E8) return 0;
+        uint32_t map = *(uint32_t *)(animator + 0x228);
+        uint32_t rig = *(uint32_t *)(animator + 0x18);
+        saved->matrices = *(uint32_t *)(animator + 4);
+        saved->flag_array = *(uint32_t *)(animator + 8);
+        if (!map || !rig || !saved->matrices || !saved->flag_array ||
+            saved->matrices == *(uint32_t *)animator) return 0;
+        saved->count = *(uint32_t *)(map + 4);
+        uint32_t rig_count = *(uint32_t *)(rig + 0x24);
+        uint32_t bones = *(uint32_t *)(rig + 0x38);
+        if (saved->count < 20 || saved->count > 128 || !bones || rig_count < saved->count || rig_count > 128) return 0;
+        float neutral[128][12];
+        memcpy(neutral[0], (void *)saved->matrices, 48);
+        // CE9990/CE9D0F's neutral-parent branch: inherit the actual parent
+        // basis, including the player's world transform, and cancel the rig's
+        // inverse bind origins. Zero translations collapse the skinned body.
+        // Compute and validate the whole rig before touching game memory.
+        for (uint32_t i = 1; i < saved->count; ++i) {
+            int bone = *(int16_t *)(map + 8 + i * 2);
+            if (bone < 0 || (uint32_t)bone >= rig_count) return 0;
+            int parent_bone = *(int32_t *)(bones + bone * 36 + 0x1C);
+            if (parent_bone < 0 || (uint32_t)parent_bone >= rig_count) return 0;
+            int parent = *(int16_t *)(map + 0x108 + parent_bone * 2);
+            if (parent < 0 || (uint32_t)parent >= i ||
+                *(int16_t *)(map + 8 + parent * 2) != parent_bone) return 0;
+            if (!neutral_rest_matrix(neutral[parent], (float *)(bones + parent_bone * 36 + 4),
+                                     (float *)(bones + bone * 36 + 4), neutral[i])) return 0;
+            memcpy(saved->local_matrix[i], (void *)(saved->matrices + i * 48), 48);
+            saved->flags[i] = *(uint32_t *)(saved->flag_array + i * 12);
+        }
+        for (uint32_t i = 1; i < saved->count; ++i) {
+            memcpy((void *)(saved->matrices + i * 48), neutral[i], 48);
+            // Local transform valid; force the native skin transform to rebuild.
+            *(uint32_t *)(saved->flag_array + i * 12) = (saved->flags[i] & ~2u) | 1u;
+        }
+        return 1;
+    } __except (EXCEPTION_EXECUTE_HANDLER) { return 0; }
+}
+
+static uint32_t __stdcall rest_pose_thunk(uint32_t animator, uint32_t levels, uint32_t threshold)
+{
+    rest_snapshot_t saved;
+    int changed = save_rest_pose(animator, &saved);
+    uint32_t result;
+    __try {
+        result = g_pose_original(animator, levels, threshold);
+    } __finally {
+        if (changed) {
+            for (uint32_t i = 1; i < saved.count; ++i) {
+                memcpy((void *)(saved.matrices + i * 48), saved.local_matrix[i], 48);
+                *(uint32_t *)(saved.flag_array + i * 12) = saved.flags[i];
+            }
+        }
+    }
+    return result;
+}
+
+static __declspec(naked) void discharge_thunk(void)
+{
+    __asm {
+        pushfd
+        cmp dword ptr [g_shot_watch], 0
+        je original
+        push eax
+        mov eax, dword ptr ds:[021703D4h]
+        test eax, eax
+        jz done
+        cmp eax, [esp + 16]     // entry [esp+8]: shooter
+        jne done
+        lock inc dword ptr [g_shots]
+    done:
+        pop eax
+    original:
+        popfd
+        push ebp
+        mov ebp, esp
+        and esp, -16
+        jmp dword ptr [g_discharge_resume]
+    }
+}
+
+static void __cdecl queue_fire_hit(uint32_t attacker, uint32_t victim, uint32_t amount, uint32_t weapon)
+{
+    if (!g_fire_watch || !attacker || attacker != *(uint32_t *)0x021703D4 || !victim ||
+        victim == attacker || !weapon || amount == 0 || amount >= 0x7F800000) return;
+    __try {
+        uint32_t base = *(uint32_t *)0x022D7BCC;
+        uint32_t count = *(uint32_t *)0x022D7BD0;
+        uint32_t offset = weapon - base;
+        if (!base || weapon < base || offset % 0x498 || offset / 0x498 >= count) return;
+        uint32_t handle = *(uint32_t *)(victim + 0x44);
+        if (!handle || handle == 0xFFFFFFFF) return;
+        if (InterlockedCompareExchange(&g_fire_lock, 1, 0)) return;
+        unsigned i = 0;
+        while (i < g_fire_count && g_fire_victims[i] != handle) ++i;
+        if (i == g_fire_count && g_fire_count < ARRAYSIZE(g_fire_victims))
+            g_fire_victims[g_fire_count++] = handle;
+        InterlockedExchange(&g_fire_lock, 0);
+    } __except (EXCEPTION_EXECUTE_HANDLER) {}
+}
+
+static __declspec(naked) void damage_thunk(void)
+{
+    __asm {
+        pushfd
+        cmp dword ptr [g_fire_watch], 0
+        je original
+        pushad
+        mov eax, esp
+        push [eax + 52]       // entry [esp+16]: weapon
+        push [eax + 44]       // entry [esp+8]: damage
+        push [eax + 40]       // entry [esp+4]: victim
+        push ecx              // attacker
+        call queue_fire_hit
+        add esp, 16
+        popad
+    original:
+        popfd
+        sub esp, 54Ch
+        jmp dword ptr [g_damage_resume]
+    }
+}
+
+static int patch_entry(uint32_t address, const uint8_t expected[6], void *hook)
+{
+    uint8_t *site = (uint8_t *)address;
+    DWORD old;
+    if (memcmp(site, expected, 6) || !VirtualProtect(site, 6, PAGE_EXECUTE_READWRITE, &old))
+        return 0;
+    site[0] = 0xE9;
+    *(int32_t *)(site + 1) = (int32_t)((uint32_t)(uintptr_t)hook - (address + 5));
+    site[5] = 0x90;
+    VirtualProtect(site, 6, old, &old);
+    FlushInstructionCache(GetCurrentProcess(), site, 6);
+    return 1;
+}
+
+static void hook_combat(void)
+{
+    static const uint8_t discharge[] = { 0x55, 0x8B, 0xEC, 0x83, 0xE4, 0xF0 };
+    static const uint8_t damage[] = { 0x81, 0xEC, 0x4C, 0x05, 0x00, 0x00 };
+    g_discharge_hook = patch_entry(0x009BE6F0, discharge, discharge_thunk);
+    g_damage_hook = patch_entry(0x009847A0, damage, damage_thunk);
+    static const uint8_t idle[] = { 0x81, 0xEC, 0x2C, 0x05, 0x00, 0x00 };
+    g_idle_hook = patch_entry(0x0096FCA0, idle, idle_thunk);
+    static const uint8_t pose[] = { 0x83, 0xEC, 0x48, 0x53, 0x8B, 0x5C, 0x24, 0x50 };
+    uint8_t *site = (uint8_t *)0x00CE7D00;
+    if (!memcmp(site, pose, sizeof pose)) {
+        uint8_t *trampoline = VirtualAlloc(NULL, 16, MEM_COMMIT | MEM_RESERVE, PAGE_EXECUTE_READWRITE);
+        DWORD old;
+        if (trampoline && VirtualProtect(site, 8, PAGE_EXECUTE_READWRITE, &old)) {
+            memcpy(trampoline, site, 8);
+            trampoline[8] = 0xE9;
+            *(int32_t *)(trampoline + 9) = (int32_t)((site + 8) - (trampoline + 13));
+            g_pose_original = (pose_combine_t)trampoline;
+            site[0] = 0xE9;
+            *(int32_t *)(site + 1) = (int32_t)((uint8_t *)rest_pose_thunk - (site + 5));
+            memset(site + 5, 0x90, 3);
+            VirtualProtect(site, 8, old, &old);
+            FlushInstructionCache(GetCurrentProcess(), site, 8);
+            g_pose_hook = 1;
+        } else if (trampoline) VirtualFree(trampoline, 0, MEM_RELEASE);
+    }
+    logf("combat events: gun discharge %s, weapon damage %s",
+        g_discharge_hook ? "ready" : "unavailable", g_damage_hook ? "ready" : "unavailable");
+    logf("preview guards: idle suppression %s, customization rest pose %s",
+        g_idle_hook ? "ready" : "unavailable", g_pose_hook ? "ready" : "unavailable");
+}
+
+static int l_preview_mode(lua_State *s)
+{
+    InterlockedExchange(&g_block_idle, g_idle_hook && lua_toboolean(s, 1));
+    InterlockedExchange(&g_rest_pose, g_pose_hook && lua_toboolean(s, 2));
+    lua_pushboolean(s, g_pose_hook);
+    return 1;
+}
+
+static int l_shots(lua_State *s)
+{
+    if (!g_discharge_hook) return 0;
+    InterlockedExchange(&g_shot_watch, lua_toboolean(s, 1));
+    lua_pushinteger(s, InterlockedExchange(&g_shots, 0));
+    return 1;
+}
+
+static int l_fire_hits(lua_State *s)
+{
+    if (!g_damage_hook) return 0;
+    int enabled = lua_toboolean(s, 1);
+    InterlockedExchange(&g_fire_watch, enabled);
+    if (InterlockedCompareExchange(&g_fire_lock, 1, 0)) return 0;
+    uint32_t victims[ARRAYSIZE(g_fire_victims)];
+    unsigned count = enabled ? g_fire_count : 0;
+    memcpy(victims, g_fire_victims, count * sizeof *victims);
+    g_fire_count = 0;
+    InterlockedExchange(&g_fire_lock, 0);
+    lua_createtable(s, count, 0);
+    for (unsigned i = 0; i < count; ++i) {
+        lua_pushinteger(s, victims[i]);
+        lua_rawseti(s, -2, i + 1);
+    }
+    return 1;
+}
+
+#include "gangdots_host.h"
+#include "gait_host.h"
 
 static void start_lua(void)
 {
@@ -572,7 +1297,13 @@ static void start_lua(void)
         { "on_frame", l_on_frame }, { "hook", l_hook },
         { "script", l_script }, { "vint", l_vint }, { "call", l_call }, { "callx", l_callx },
         { "buffer", l_buffer }, { "read_string", l_read_string }, { "patch", l_patch },
-        { "pad", l_pad }, { "f2u", l_f2u }, { "u2f", l_u2f },
+        { "pad", l_pad }, { "pad_filter", l_pad_filter }, { "pad_inject", l_pad_inject }, { "pad_debug", l_pad_debug }, { "sticks", l_sticks }, { "pad_source", l_pad_source }, { "set_fov", l_set_fov },
+        { "f2u", l_f2u }, { "u2f", l_u2f },
+        { "gun_shots", l_shots }, { "fire_hits", l_fire_hits },
+        { "preview_mode", l_preview_mode },
+        { "menu_capture", l_menu_capture }, { "grab_remap", l_grab_remap },
+        { "gang_dots", l_gang_dots },
+        { "sr1_gait", l_sr1_gait },
         { NULL, NULL }
     };
     luaL_newlib(L, api);
@@ -610,6 +1341,14 @@ static void __cdecl on_frame(void)
     for (lua_Integer i = 1; i <= n; i++) {
         lua_rawgeti(L, -1, i);
         if (lua_pcall(L, 0, 0, 0) != LUA_OK) {
+            if (g_menu_capture) {
+                g_pad_all = 1;
+                static const char warning[] = "SR TWEAK MENU\nMenu update failed. Input captured for safety.\nPress F5 to close the menu.";
+                EnterCriticalSection(&g_lock);
+                memcpy(g_mailbox + 0x40, warning, sizeof warning - 1);
+                mailbox_set(MAILBOX + 0x14, 4, sizeof warning - 1);
+                LeaveCriticalSection(&g_lock);
+            }
             static char last[512];
             const char *e = lua_tostring(L, -1);
             if (e && strncmp(last, e, sizeof last - 1)) { strncpy_s(last, sizeof last, e, _TRUNCATE); logf("frame error: %s", e); }
@@ -694,7 +1433,13 @@ static __declspec(naked) void frame_thunk(void)
         call on_frame
         popfd
         popad
-        jmp dword ptr [g_frame_prev]
+        call dword ptr [g_frame_prev]
+        pushad
+        pushfd
+        call after_input_update
+        popfd
+        popad
+        ret
     }
 }
 static __declspec(naked) void draw_thunk(void)
@@ -732,8 +1477,13 @@ static DWORD WINAPI installer(LPVOID unused)
     HMODULE engine = GetModuleHandleA("DFEngine.dll");
     if (!engine || !GetProcAddress(engine, "RegisterVintLuaHookString")) {
         logf("Juiced Patch isn't installed; hooking the game directly");
+        hook_combat();
         patch_call(DRAW_CALL_SITE, (void *)draw_thunk, &g_draw_prev);
         patch_call(FRAME_CALL_SITE, (void *)frame_thunk, &g_frame_prev);
+        hook_pad_import();
+        patch_call(PAD_POLL_SITE_X, (void *)pad_poll_thunk_x, &g_poll_prev_x);
+        patch_call(PAD_POLL_SITE_D, (void *)pad_poll_thunk_d, &g_poll_prev_d);
+        hook_fov();
         return 0;
     }
     int waited = 0;
@@ -742,8 +1492,14 @@ static DWORD WINAPI installer(LPVOID unused)
         Sleep(50);
     }
     logf(waited < 400 ? "Juiced's hooks found after %d ms" : "Juiced's hooks not found after %d ms; hooking the game directly", waited * 50);
+    hook_combat();
     patch_call(DRAW_CALL_SITE, (void *)draw_thunk, &g_draw_prev);
     patch_call(FRAME_CALL_SITE, (void *)frame_thunk, &g_frame_prev);
+    // (after Juiced's own: its XInput and field of view hooks are wrapped, not replaced)
+    hook_pad_import();
+    patch_call(PAD_POLL_SITE_X, (void *)pad_poll_thunk_x, &g_poll_prev_x);
+    patch_call(PAD_POLL_SITE_D, (void *)pad_poll_thunk_d, &g_poll_prev_d);
+    hook_fov();
     return 0;
 }
 
@@ -829,9 +1585,15 @@ static HRESULT WINAPI my_create_device(void *self, REFGUID guid, void **device, 
     return hr;
 }
 
+// Loaded as an .asi by an ASI loader (which is dinput8.dll itself): the
+// game's DirectInput8Create import is pointed here instead, and passed on
+// to what it pointed to before (the loader's, then the real one).
+static create_t g_di8_next;
+
 HRESULT WINAPI proxy_DirectInput8Create(HINSTANCE inst, DWORD version, REFIID riid, LPVOID *out, LPUNKNOWN outer)
 {
     static create_t real;
+    if (!real && g_di8_next) real = g_di8_next;
     if (!real) {
         char path[MAX_PATH];
         GetSystemDirectoryA(path, MAX_PATH);
@@ -843,6 +1605,39 @@ HRESULT WINAPI proxy_DirectInput8Create(HINSTANCE inst, DWORD version, REFIID ri
     HRESULT hr = real(inst, version, riid, out, outer);
     if (SUCCEEDED(hr) && out && *out) hook_vtable(g_create_device, *(void ***)*out, 3, (void *)my_create_device);
     return hr;
+}
+
+// The game's import slot for dinput8.dll's DirectInput8Create, found in
+// SR2_pc.exe's import table (NULL if it hasn't one).
+static void **di8_import_slot(void)
+{
+    uint8_t *base = (uint8_t *)GetModuleHandleA(NULL);
+    IMAGE_NT_HEADERS *nt = (IMAGE_NT_HEADERS *)(base + ((IMAGE_DOS_HEADER *)base)->e_lfanew);
+    IMAGE_DATA_DIRECTORY dir = nt->OptionalHeader.DataDirectory[IMAGE_DIRECTORY_ENTRY_IMPORT];
+    if (!dir.VirtualAddress) return NULL;
+    for (IMAGE_IMPORT_DESCRIPTOR *d = (IMAGE_IMPORT_DESCRIPTOR *)(base + dir.VirtualAddress); d->Name; d++) {
+        if (_stricmp((char *)(base + d->Name), "dinput8.dll")) continue;
+        IMAGE_THUNK_DATA *names = (IMAGE_THUNK_DATA *)(base + (d->OriginalFirstThunk ? d->OriginalFirstThunk : d->FirstThunk));
+        IMAGE_THUNK_DATA *slots = (IMAGE_THUNK_DATA *)(base + d->FirstThunk);
+        for (; names->u1.AddressOfData; names++, slots++) {
+            if (IMAGE_SNAP_BY_ORDINAL(names->u1.Ordinal)) continue;
+            IMAGE_IMPORT_BY_NAME *n = (IMAGE_IMPORT_BY_NAME *)(base + names->u1.AddressOfData);
+            if (!strcmp((char *)n->Name, "DirectInput8Create")) return (void **)&slots->u1.Function;
+        }
+    }
+    return NULL;
+}
+static void hook_di8_import(void)
+{
+    void **slot = di8_import_slot();
+    if (!slot || !*slot) { logf("no DirectInput8Create import found; the menu can't keep keys from the game"); return; }
+    if (*slot == (void *)proxy_DirectInput8Create) return;
+    DWORD old;
+    if (!VirtualProtect(slot, sizeof *slot, PAGE_READWRITE, &old)) { logf("couldn't unprotect the DirectInput8Create import"); return; }
+    g_di8_next = (create_t)*slot;
+    *slot = (void *)proxy_DirectInput8Create;
+    VirtualProtect(slot, sizeof *slot, old, &old);
+    logf("loaded as an .asi: DirectInput8Create import at %p wrapped (it went to %p)", (void *)slot, (void *)g_di8_next);
 }
 
 // ------------------------------------------------------------------ entry
@@ -901,6 +1696,12 @@ BOOL WINAPI DllMain(HINSTANCE self, DWORD reason, LPVOID unused)
     CreateDirectoryA(g_root, NULL);
     g_log = _fsopen(g_log_path, "w", _SH_DENYNO);   // (readable while the game runs)
     logf("SR2 Tweak Menu host started in %s", g_game_dir);
+
+    // As scripts\SRTweakMenu.asi (next to an ASI loader that is the game's
+    // dinput8.dll) rather than as dinput8.dll itself.
+    char self_path[MAX_PATH];
+    DWORD self_len = GetModuleFileNameA(self, self_path, MAX_PATH);
+    if (self_len > 4 && !_stricmp(self_path + self_len - 4, ".asi")) hook_di8_import();
 
     g_ov_x = ini_int("overlay_x", g_ov_x);
     g_ov_y = ini_int("overlay_y", g_ov_y);

@@ -56,26 +56,17 @@ end
 local function bill(v) return v > 0 and v or math.random(10, 500) end
 
 -- ---------------------------------------------------------------- money gun
--- The game's own per-shot event (on_weapon_fired, as its missions use)
--- counts your shots in the game's Lua; each new shot throws a bill from your
--- hand the way the camera faces. (SR2 keeps no "where the bullet hit".)
-local shots_seen, gun_armed_at = nil, -1000
-local function money_gun(p, dollars)
-  if F.tick - gun_armed_at > 300 then   -- (missions can clear the event: set it again now and then)
-    gun_armed_at = F.tick
-    G.lua('if not rawget(_G, "tweak_on_fire") then rawset(_G, "tweak_on_fire", function() '
-      .. 'rawset(_G, "TWEAK_SHOTS", (rawget(_G, "TWEAK_SHOTS") or 0) + 1) end) end on_weapon_fired("tweak_on_fire", LOCAL_PLAYER)')
-  end
-  local _, n = wml.script('tweak_out(rawget(_G, "TWEAK_SHOTS") or 0)')
-  n = tonumber(n) or 0
-  if shots_seen == nil or n < shots_seen then shots_seen = n end
-  if n == shots_seen then return end
-  shots_seen = n
+-- Each native discharge throws a bill, including rounds in a held burst.
+local function money_gun(p, dollars, shots)
+  if shots == 0 then return end
   local fx, fy, fz = read_f32(0x025F5B50), read_f32(0x025F5B54), read_f32(0x025F5B58)
-  local it = spawn_cash(p, read_f32(p + 0x14) + fx, read_f32(p + 0x18) + 1.4, read_f32(p + 0x1C) + fz, dollars, false)
-  if it ~= 0 then
-    local body = read_u32(it + 0x7C)
-    wml.callx(0x006FC9E0, { ecx = body }, vec3(9, fx * 25, fy * 25 + 2, fz * 25))
+  local x, y, z = read_f32(p + 0x14) + fx, read_f32(p + 0x18) + 1.4, read_f32(p + 0x1C) + fz
+  for _ = 1, math.min(shots, 32) do
+    local it = spawn_cash(p, x, y, z, dollars, false)
+    if it ~= 0 then
+      local body = read_u32(it + 0x7C)
+      if body ~= 0 then wml.callx(0x006FC9E0, { ecx = body }, vec3(9, fx * 25, fy * 25 + 2, fz * 25)) end
+    end
   end
 end
 
@@ -240,8 +231,12 @@ function I.setup(features)
   F.add_rows("Weapons", nil, {
     { id = "money_gun", label = "Money gun", kind = "toggle",
       help = "Every shot throws a bill the way you aim; pick them up after. Experimental.",
-      update = function(ctx, p, v) if v == 0 then money_gun(p, F.items.money_gun_cash.v or 100) end end,
-      off = function() shots_seen = nil end },
+      change = function()
+        if F.items.money_gun.v and (not wml.gun_shots or wml.gun_shots(false) == nil) then
+          F.items.money_gun.v = false
+          return "Native gun events are unavailable in this game build"
+        end
+      end },
     { id = "money_gun_cash", label = "Money gun bill ($)", kind = "value", needs = "none", default = 100, min = 100, max = 10000, step = 100,
       fmt = fmtint, oneshot = true, help = "How many dollars each bill from the money gun is worth. Default 100." },
   })
@@ -317,6 +312,11 @@ end
 
 -- Every frame.
 function I.after_update(p)
+  if wml.gun_shots then
+    local enabled = p ~= 0 and F.on("money_gun") and not F.menu_open()
+    local shots = wml.gun_shots(enabled) or 0
+    if enabled then money_gun(p, F.items.money_gun_cash.v or 100, shots) end
+  end
   garage_tick()
   save_tick()
   unlock_tick()

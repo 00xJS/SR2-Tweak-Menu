@@ -160,8 +160,10 @@ local function fov_frame()
       mult = mult * (1 + s * (F.items.speed_fov.v / 90 - 1))
     end
   end
-  fov_cell(mult)
-  return mult ~= 1.0
+  -- (the free camera's zoom, RB / LB, on top)
+  local FC = package.loaded.freecam
+  if FC and FC.on then mult = mult * (FC.zoom or 1) end
+  return mult
 end
 
 -- ---------------------------------------------------------------- first person
@@ -361,8 +363,14 @@ end
 function Q.after_update(p)
   -- Driving camera hold.
   if hold_wanted() then camera_hold(); apply("autocenter", AUTOCENTER, true) else apply("autocenter", AUTOCENTER, false) end
-  -- Field of view (the multiplier and the speed widening share one cell).
-  if fov_frame() then apply("fov_patch", FOV, true) else apply("fov_patch", FOV, false) end
+  -- Field of view (the multiplier and the speed widening together): through
+  -- the host's wrap of the game's field of view getter. Juiced Patch
+  -- (FOVMultiplier, FixUltrawideFOV) changes the instruction the old patch
+  -- pointed at our cell, so that patch is only the fallback without the wrap.
+  local mult = fov_frame()
+  if wml.set_fov(mult) then apply("fov_patch", FOV, false)
+  elseif mult ~= 1.0 then fov_cell(mult) apply("fov_patch", FOV, true)
+  else apply("fov_patch", FOV, false) end
   -- Load last save: once, on the main menu, after the wait; any key or
   -- button meanwhile keeps the menu.
   if F.items.load_last_save.v and not last_save_done then

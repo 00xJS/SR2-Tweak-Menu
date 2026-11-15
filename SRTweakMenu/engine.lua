@@ -91,17 +91,28 @@ end
 local VEH = { BY_NAME = 0x00AE4090, SPAWN = 0x00AE4AE0, LAST = 0x0252A0E0, FREE = 0x022A84D0,
   PTR = 0x00AE28F0, DELETE = 0x00AA4490, FADE = 0x00AABC80, ENTER = 0x00597C40, UNRAGDOLL = 0x009ACB10 }
 local spawned_vehicles = {}
+local vehicle_session
+local function sync_vehicles(p)
+  local actor = p ~= 0 and read_u32(p + 0x44) or 0
+  if not vehicle_session or vehicle_session.p ~= p or vehicle_session.actor ~= actor then
+    spawned_vehicles = {}
+    vehicle_session = { p = p, actor = actor }
+  end
+end
 
 -- Spawns `name` (an xtbl name) in front of the player and puts them in it.
 local function spawn_vehicle(name)
   local p = G.player(); if p == 0 then return "Load a game first" end
+  sync_vehicles(p)
   if read_u32(VEH.FREE) == 0 then return "Too many vehicles about: try again elsewhere" end
   local idx = wml.callx(VEH.BY_NAME, { ecx = wml.buffer(0, name) })
   if idx == 0xFFFFFFFF then return "The game doesn't know " .. name end
   wml.call(VEH.SPAWN, idx)
   local v = wml.callx(VEH.PTR, { ecx = read_u32(VEH.LAST) })
   if v == 0 then return "The vehicle didn't spawn" end
-  spawned_vehicles[#spawned_vehicles + 1] = read_u32(VEH.LAST)
+  spawned_vehicles[#spawned_vehicles + 1] = {
+    handle = read_u32(VEH.LAST), vehicle = v,
+    instance = read_u32(v + 0x84D4), info = read_u32(v + 0x84E4) }
   wml.callx(VEH.FADE, { eax = v, edx = 500 })
   wml.call(VEH.UNRAGDOLL, p, 0)
   wml.callx(VEH.ENTER, { esi = p, edi = v }, 0)
@@ -129,13 +140,17 @@ end
 
 -- ---------------------------------------------------------------- people
 local NPC = { CHAR = 0x004A5A90, CREATE = 0x009CFCE0, FOLLOW = 0x0098EC10, DELETE = 0x00960240 }
-local spawned_people = {}
+local BODYGUARDS = require("bodyguards")
 
--- Characters for spawning and play-as: data/characters.lua's presets.
+-- Characters for spawning: every preset the game loads (data/characters_all.lua,
+-- in the Models tab's groups), "Name (Group)"; the old cheat list if it's missing.
 local function character_list()
-  local C = F.data("characters")
   local list = {}
-  for _, c in ipairs(C) do list[#list + 1] = { c[2], c[3] or c[2] } end
+  for _, g in ipairs(F.data("characters_all")) do
+    for _, c in ipairs(g[2]) do list[#list + 1] = { c[1], c[2] .. " (" .. g[1] .. ")" } end
+  end
+  if #list > 0 then return list end
+  for _, c in ipairs(F.data("characters")) do list[#list + 1] = { c[2], c[3] or c[2] } end
   table.sort(list, function(a, b) return a[2]:lower() < b[2]:lower() end)
   return list
 end
@@ -143,7 +158,11 @@ end
 -- Creates `name` (a character preset) two metres in front of the player;
 -- `follow`: as a follower (the game allows three).
 local function spawn_person(name, follow)
-  local p = G.player(); if p == 0 then return nil, "Load a game first" end
+  local p = G.player(); if p == 0 or not G.playing(p) then return nil, "Load a game first" end
+  if follow then
+    local room, why = BODYGUARDS.room(p)
+    if not room then return nil, why end
+  end
   local ch = wml.callx(NPC.CHAR, { ecx = wml.buffer(2, name) })
   if ch == 0 then return nil, "The game doesn't know " .. name end
   local s = wml.buffer(3, string.rep("\0", 0x60))
@@ -158,9 +177,15 @@ local function spawn_person(name, follow)
   write_u8(s + 0x55, 1); write_u8(s + 0x57, 1)
   local h = wml.callx(NPC.CREATE, { eax = s })
   if h == 0 then return nil, "They didn't spawn (too many people about?)" end
-  if follow then wml.call(NPC.FOLLOW, p, h, 0, 1) end
-  spawned_people[#spawned_people + 1] = read_u32(h + 0x44)
-  return h
+  local kept, why = BODYGUARDS.track(p, h, follow, ch)
+  if not kept then
+    local token = read_u32(h + 0x44)
+    if object(token) == h and read_u32(h + 0xD4) == ch then
+      wml.callx(NPC.DELETE, { ecx = h }, 0)
+    end
+    return nil, why
+  end
+  return h, why
 end
 
 function E.spawn_person_row()
@@ -173,24 +198,16 @@ function E.spawn_person_row()
 end
 function E.bodyguard_row()
   return { id = "bodyguard", label = "Spawn bodyguard", kind = "list", items = character_list(), nosave = true,
-    help = "Left/Right to choose, Enter: they join you as a homie (three at most).",
+    help = "Spawn an armed follower. Uses your native homie limit, up to three; follows, fights and boards vehicles with you.",
     run = function(ctx, p, v, it)
       local h, why = spawn_person(it.items[it.v][1], true)
-      return h and (it.items[it.v][2] .. " has your back") or why
+      return h and (why or (it.items[it.v][2] .. " has your back")) or why
     end }
 end
 function E.remove_people_row()
   return { id = "remove_people", label = "Remove spawned people", kind = "action",
     help = "Everyone the menu spawned goes away.",
-    run = function()
-      local n = 0
-      for _, h in ipairs(spawned_people) do
-        local o = object(h)
-        if o and read_u32(o + 0x4C) == 1 and o ~= G.player() then wml.callx(NPC.DELETE, { ecx = o }, 0); n = n + 1 end
-      end
-      spawned_people = {}
-      return "Removed " .. n
-    end }
+    run = function(_, p) return BODYGUARDS.remove(p) end }
 end
 
 -- ---------------------------------------------------------------- camera
@@ -266,10 +283,14 @@ function E.remove_vehicles_row()
   return { id = "remove_vehicles", label = "Remove spawned vehicles", kind = "action",
     help = "Every vehicle the menu spawned goes away (not the one you're in).",
     run = function(ctx, p)
+      sync_vehicles(p)
       local n, mine = 0, read_u32(p + 0xD74)
-      for _, h in ipairs(spawned_vehicles) do
-        local o = object(h)
-        if o and read_u32(o + 0x4C) == 5 and h ~= mine then wml.callx(VEH.DELETE, { ecx = o }, 0); n = n + 1 end
+      for _, entry in ipairs(spawned_vehicles) do
+        local o = object(entry.handle)
+        if o == entry.vehicle and read_u32(o + 0x4C) == 5 and entry.handle ~= mine
+          and read_u32(o + 0x84D4) == entry.instance and read_u32(o + 0x84E4) == entry.info then
+          wml.callx(VEH.DELETE, { ecx = o }, 0); n = n + 1
+        end
       end
       spawned_vehicles = {}
       return "Removed " .. n
@@ -299,6 +320,14 @@ local function humans()
   end
   return list
 end
+-- Recruit: the nearest person on your side (the team byte at human+0x111C,
+-- where get_team reads it - yours is the gang you joined) follows you, with
+-- the call Spawn bodyguard uses. SR2's own recruit prompt only knows the Saints.
+function E.recruit_row()
+  return { id = "recruit_nearest", label = "Recruit nearest gang member", kind = "action",
+    help = "The nearest member of the gang you're with (the Saints, or the one picked in Join Gang) within 20 metres joins you as a homie.",
+    run = function(ctx, p) return BODYGUARDS.recruit(p, humans()) end }
+end
 function E.drop_row()
   return { id = "drop", label = "Ragdoll all NPCs", kind = "action",
     help = "Everybody around you falls over.",
@@ -322,6 +351,18 @@ local EVERYBODY = {
   { { "tour Stand" }, "Tourists" },
   { false, "Back to normal" },
 }
+-- (each person plays the state's clip as a looping track of their own - the
+-- way Emotes plays yours - so nobody's script or AI state is forced; the
+-- tracks are stopped again by Back to normal)
+local PLAYBACK = require("emote_playback")
+local everybody_tracks = {}
+local function everybody_stop()
+  for _, t in ipairs(everybody_tracks) do
+    local o = object(t.handle)
+    if o and o == t.token.p then pcall(PLAYBACK.stop, o, t.token) end
+  end
+  everybody_tracks = {}
+end
 local function state_index(name)
   local i = wml.call(0x006EF510, wml.buffer(4, name))
   return i ~= 0xFFFFFFFF and i or nil
@@ -335,12 +376,19 @@ function E.everybody_row()
     help = "Left/Right to pick what people near you do, Enter to start. Back to normal stops it.",
     run = function(ctx, p, v, it)
       local choice = it.items[it.v]
-      local states = {}
-      for _, name in ipairs(choice[1] or {}) do states[#states + 1] = state_index(name) end
-      if choice[1] and #states == 0 then return "Saints Row 2 hasn't got that one" end
-      local list = humans()
-      for i, o in ipairs(list) do set_state(o, choice[1] and states[(i - 1) % #states + 1] or 0xFFFFFFFF) end
-      return choice[1] and string.format("Everybody: %s (%d people)", choice[2], #list) or "Everybody back to normal"
+      everybody_stop()
+      if not choice[1] then return "Everybody back to normal" end
+      local list, n = humans(), 0
+      for i, o in ipairs(list) do
+        local name = choice[1][(i - 1) % #choice[1] + 1]
+        local ok, token = pcall(PLAYBACK.play_other, o, "State", name, true)
+        if ok and token and not token.external then
+          n = n + 1
+          everybody_tracks[#everybody_tracks + 1] = { handle = read_u32(o + 0x44), token = token }
+        end
+      end
+      if n == 0 then return "Nobody near you could play that (" .. #list .. " people)" end
+      return string.format("Everybody: %s (%d of %d people)", choice[2], n, #list)
     end }
 end
 
@@ -400,14 +448,24 @@ function E.clear_scene_row()
     help = "The people from Stage a scene go away.",
     run = function()
       local n = 0
+      local p = G.player()
       for _, h in ipairs(scene_people) do
-        local o = object(h)
-        if o and read_u32(o + 0x4C) == 1 then wml.callx(NPC.DELETE, { ecx = o }, 0); n = n + 1 end
+        if BODYGUARDS.remove_one(p,h) then n = n + 1 end
       end
       scene_people = {}
       return "Cleared " .. n
     end }
 end
 
-function E.attach(features) F = features end
+function E.dismiss_homies_row()
+  return { id = "dismiss_homies", label = "Dismiss homies", kind = "action",
+    help = "Dismiss your party and cancel bodyguards still waiting to join.",
+    run = function(_, p) return BODYGUARDS.dismiss(p) end }
+end
+
+function E.attach(features)
+  F = features
+  F.after_updates[#F.after_updates + 1] = BODYGUARDS.update
+  F.after_updates[#F.after_updates + 1] = function(p) sync_vehicles(p) end
+end
 return E
