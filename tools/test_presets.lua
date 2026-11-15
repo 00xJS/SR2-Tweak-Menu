@@ -61,6 +61,7 @@ wml = {
     if a == 0x00AC8080 then return fitted[regs.edx] or 0 end
     if a == 0x00AC80B0 then return paint[regs.esi .. ":" .. regs.edx] or POOL end
     if a == 0x00AC7DF0 then for s, c in pairs(fitted) do if c == component then fitted[s] = nil end end return 0 end
+    if a == 0x006EF510 then return ({ walk = 50, ["custom walk male 1"] = 61 })[buffers[14]] or 0xFFFFFFFF end
     if a == 0x00AC9F40 then
       for i, c in ipairs(require("data.vehicle_colors")) do
         if c[1] == buffers[12] then return POOL + (i - 1) * 28 end
@@ -71,6 +72,10 @@ wml = {
   end,
   vint = function(code)
     if code:find("pcu_is_streaming_done", 1, true) then return true, true end
+    if code:find("pcr_report_anims", 1, true) then return true, 2 end
+    if code:find("tweak_out(list[i][1], list[i][2], list[i][3])", 1, true) then return true, "Plain", 0, false, "Swagger", 1, false end
+    local walk = code:match('^pcr_set_anim%("walk_style", (%d+)%)$')
+    if walk then wr(P + 0x1138, 4, rd(0x40000000 + tonumber(walk) * 12 + 8, 4)) return true end
     local set = code:match('pcr_report_avail_morphs%("([^"]+)"')
     if set then listed = SETS[set] or {} return true, #listed end
     set = code:match('tweak_out%(list%[i%], pcr_get_morph_value%("([^"]+)"')
@@ -174,4 +179,23 @@ assert(row(page, "Load this slot").run():find("empty"))
 wr(P + 0xD74, 4, 0)
 assert(type(V.presets_page(P)) == "string")
 os.remove(scratch .. "\\saved_presets.lua")
+
+-- -------------------------------------------------------------- walk style
+-- The kept style comes back only from the default walk.
+reload()
+package.loaded.native_walk = nil
+local W = require("native_walk")
+wr(0x025274D4, 4, 0x40000000); wr(0x025274D8, 4, 2)
+wr(0x40000000 + 8, 4, 50); wr(0x40000000 + 12 + 8, 4, 61)
+wr(P + 0x1138, 4, 50)
+W.keep(P, 120)
+assert(rd(P + 0x1138, 4) == 50, "nothing kept yet")
+require("presets").all().walk = "custom walk male 1"
+W.keep(P, 119)
+assert(rd(P + 0x1138, 4) == 50, "only every 120 ticks")
+W.keep(P, 120)
+assert(rd(P + 0x1138, 4) == 61, "the kept walk comes back")
+wr(P + 0x1138, 4, 77)   -- a walk the game chose
+W.keep(P, 240)
+assert(rd(P + 0x1138, 4) == 77, "another walk is left alone")
 print("presets: ok")

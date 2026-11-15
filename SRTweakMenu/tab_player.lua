@@ -109,6 +109,7 @@ return function(F, G)
 
     F.page("player_bodyguards", "Bodyguards", "Bodyguards and homies: spawn them, dismiss them, how many you can have.", {
       ENGINE.bodyguard_row(),
+      ENGINE.bodyguard_weapon_row(),
       ENGINE.recruit_row(),
       ENGINE.dismiss_homies_row(),
       { id = "homies", label = "More homies", kind = "toggle",

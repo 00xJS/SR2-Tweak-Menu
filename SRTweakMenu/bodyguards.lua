@@ -67,8 +67,11 @@ local function destroy(entry, p)
   if o then wml.callx(0x00960240, { ecx = o }, 0) return true end
   return false
 end
+-- B.pick (set by the Bodyguard weapon row) names the gun new bodyguards get.
 local function arm(o)
-  local weapon = wml.call(0x00B716E0, wml.buffer(2, "glock"))
+  local name = B.pick and B.pick() or "glock"
+  local weapon = wml.call(0x00B716E0, wml.buffer(2, name))
+  if weapon == 0 and name ~= "glock" then weapon = wml.call(0x00B716E0, wml.buffer(2, "glock")) end
   if weapon == 0 then return false end
   -- Same native calls and arguments as inv_item_add_do, inv_item_add_ammo
   -- and npc_unholster_best_weapon, operating on this human's own inventory.

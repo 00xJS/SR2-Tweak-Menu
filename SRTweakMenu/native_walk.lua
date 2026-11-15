@@ -64,6 +64,38 @@ local function catalog()
   return entries
 end
 
+-- Keep walk style (Customize > Movement): the last stock style applied here
+-- is remembered in saved_presets.lua and put back when the game has dropped
+-- the player to the default walk (a new model, a load). It only ever acts
+-- on the default walk, so a walk the game itself switched to is left alone.
+local presets = require("presets")
+local function remember(name)
+  local all = presets.all()
+  if all.walk ~= name then
+    all.walk = name
+    presets.write()
+  end
+end
+function W.kept() return presets.all().walk end
+function W.keep(p, tick)
+  local wanted = presets.all().walk
+  if type(wanted) ~= "string" or tick % 120 ~= 0 then return end
+  if p == 0 or G.player() ~= p or not G.playing(p) or wml.read_u32(p + 0x18D4) ~= 0
+    or wml.read_u32(0x00E8D308) == 1 then return end
+  local default, target = state_id("walk"), state_id(wanted)
+  if default == 0xFFFFFFFF or target == 0xFFFFFFFF or target == default
+    or wml.read_u32(p + 0x1138) ~= default then return end
+  local table_ptr, count = wml.read_u32(0x025274D4), wml.read_u32(0x025274D8)
+  if table_ptr == 0 or count == 0 or count > 256 then return end
+  for _, entry in ipairs(catalog()) do
+    if entry.id < count and wml.read_u32(table_ptr + entry.id * 12 + 8) == target then
+      G.vint(('pcr_set_anim("walk_style", %d)'):format(entry.id))
+      wml.log("walk style kept: " .. wanted .. (wml.read_u32(p + 0x1138) == target and "" or " (didn't take)"))
+      return
+    end
+  end
+end
+
 function W.page(p, previews)
   if p == 0 or not G.playing(p) then return "Walk styles need a player on foot" end
   local actor = wml.read_u32(p + 0x44)
@@ -87,6 +119,7 @@ function W.page(p, previews)
         if not valid() then return "Can't change walk style right now" end
         local ok = G.lua('character_set_walk_variant(LOCAL_PLAYER, "default")')
         if not ok or wml.read_u32(p + 0x1138) ~= default then return "Couldn't restore the default walk" end
+        remember(false)
         return "Walk: Default"
       end }
   end
@@ -107,6 +140,7 @@ function W.page(p, previews)
               or wml.read_u32(table_ptr + entry.id * 12 + 8) ~= state then return "The walk-style catalog changed; reopen this page" end
             local ok = G.vint(('pcr_set_anim("walk_style", %d)'):format(entry.id))
             if not ok or wml.read_u32(p + 0x1138) ~= state then return "Couldn't apply this walk style" end
+            remember(name)
             return "Walk: " .. (type(entry.label) == "string" and entry.label or name)
           end }
       end

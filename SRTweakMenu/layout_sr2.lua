@@ -32,7 +32,7 @@ local PLACE = {
   { tab = "Emotes", after = "actions", rows = { "all_actions" } },
   { new_page = "style_movement", tab = "Customize", label = "Movement",
     help = "Preview a stance, walk or run in place. Accept applies a style your character can use in play.",
-    rows = { "stand_variant", "walk_variant", "run_variant" } },
+    rows = { "stand_variant", "walk_variant", "run_variant", "keep_walk" } },
 }
 
 local function tab_of(F, name)

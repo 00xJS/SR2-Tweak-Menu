@@ -204,6 +204,23 @@ function E.bodyguard_row()
       return h and (why or (it.items[it.v][2] .. " has your back")) or why
     end }
 end
+-- The gun a new bodyguard is handed: the firearms of the pistol, SMG,
+-- shotgun and rifle slots (what the arming calls are known to work with).
+function E.bodyguard_weapon_row()
+  local names, labels, v = {}, {}, 1
+  for _, w in ipairs(F.data("weapons")) do
+    local slot = w[3]
+    if (slot == "pistol" or slot == "smg" or slot == "shotgun" or slot == "rifle") and not w.melee and not w.note then
+      names[#names + 1], labels[#labels + 1] = w[1], w[2]
+      if w[1] == "glock" then v = #names end
+    end
+  end
+  if #names == 0 then names, labels = { "glock" }, { "NR4" } end
+  local row = { id = "bodyguard_weapon", label = "Bodyguard weapon", kind = "choice", options = labels, v = v, needs = "none",
+    help = "The gun the next bodyguards you spawn are given. Bodyguards already with you keep theirs." }
+  BODYGUARDS.pick = function() return names[row.v] or "glock" end
+  return row
+end
 function E.remove_people_row()
   return { id = "remove_people", label = "Remove spawned people", kind = "action",
     help = "Everyone the menu spawned goes away.",

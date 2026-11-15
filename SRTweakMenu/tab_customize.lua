@@ -24,6 +24,7 @@ return function(F, G)
     body.enabled = F.enabled
     body.update(p)
     looks.update(p)
+    if F.enabled and F.items.keep_walk and F.items.keep_walk.v then native_walk.keep(p, F.tick) end
     if F.hair_preview then F.hair_preview() end
   end
 
@@ -203,6 +204,8 @@ return function(F, G)
     rows[#rows + 1] = page("Mission Outfits", "Browse outfits worn in missions and activities.", contents)
   end
   rows[#rows + 1] = looks.row(F)
+  F.register({ { id = "keep_walk", label = "Keep walk style", kind = "toggle", needs = "none",
+    help = "Puts your chosen stock Walk Style back whenever the game resets you to the default walk, such as after a model change or loading a save." } })
   for _, category in ipairs(F.categories) do
     if category.name == "Customize" then
       F.items.open_creator = nil
