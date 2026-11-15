@@ -110,6 +110,20 @@ for _, tab in ipairs({ "player", "models", "customize", "emotes", "weapons", "ve
   local ok, err = pcall(function() require("tab_" .. tab)(F, G) end)
   if not ok then wml.log("tab " .. tab .. " failed to load: " .. tostring(err)) end
 end
+-- Features in modules of their own: { module, tab, which of its rows } (all when nil).
+for _, extra in ipairs({
+  { "limited", "Weapons" }, { "locked_cars", "Vehicles" },
+  { "food_items", "Player", { items = true } }, { "food_items", "Weapons", { give_item = true, give_item_count = true } },
+}) do
+  local ok, err = pcall(function()
+    local rows = {}
+    for _, row in ipairs(require(extra[1]).rows(F, G)) do
+      if not extra[3] or extra[3][row.id] then rows[#rows + 1] = row end
+    end
+    F.add_rows(extra[2], nil, rows)
+  end)
+  if not ok then wml.log(extra[1] .. " failed to load: " .. tostring(err)) end
+end
 -- The quality-of-life rows (SR1's juiced.lua rows), into the tabs above.
 do
   local ok, err = pcall(function()

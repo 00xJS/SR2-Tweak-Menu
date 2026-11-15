@@ -59,7 +59,7 @@ return function(F, G)
       if held[w[1]] then
         rows[#rows + 1] = { label = w[2], kind = "action", help = "Takes the " .. w[2] .. " away.",
           run = function()
-            G.lua("local ok = pcall(inv_item_remove, %s, LOCAL_PLAYER)", w[1])
+            G.lua("local ok = pcall(inv_item_remove, %s, 1, LOCAL_PLAYER)", w[1])
             return "Removed: " .. w[2]
           end }
       end
