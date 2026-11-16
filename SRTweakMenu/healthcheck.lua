@@ -323,6 +323,8 @@ local function steps(F)
     say("  Limited Weapons: pick up a second big gun; the first should go to the stash, Swap big gun brings it back.")
     say("  Saved Looks: save, change your hair, load. Vehicle Presets: save, change a part and the paint, load.")
     say("  Bodyguard weapon: pick the AR-200, spawn a bodyguard, see what they hold.")
+    say("  Favorites: F (or Y) on God mode, then PgUp from Player: it's on the Favorites tab.")
+    say("  Hotkeys: H on God mode, then F3; close the menu, press F3. Does a message show top left?")
   end)
   return list
 end

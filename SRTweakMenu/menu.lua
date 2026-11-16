@@ -30,6 +30,8 @@ local S = wml.setting
 -- text, silent, or itsMJQ's game look - the menu drawn with the game's own
 -- interface (gameui.lua: its fonts, menu pictures and sounds).
 local GAMEUI = require("gameui")
+-- Favorites and hotkeys: F / Y pins a row, H gives it a key (favorites.lua).
+local FAV = require("favorites")
 local style_game = require("menu_settings").style ~= "text"
 local retry_at = 0
 local UI = setmetatable({ sound = function(ctx, name) if style_game then GAMEUI.sound(ctx, name) end end }, { __index = GAMEUI })
@@ -517,6 +519,7 @@ end
 function M.input(ctx, tick)
   M.tick, M.ctx = tick, ctx
   M.navigating = false
+  FAV.refresh()
   -- A tab that stopped applying (Customize as someone with no options) is
   -- left; rows that came and went keep the cursor on one that's there.
   if not shown(F.categories[M.tab]) then M.tab = step_tab(M.tab, 1) end
@@ -536,7 +539,12 @@ function M.input(ctx, tick)
       and (M.pad & combo_press) ~= 0 and (pad_prev & combo_press) == 0)
   M.hold_toggle = false
   if toggle and not M.locked then set_open(not M.open) end
-  if M.open and was_open then
+  if M.open and was_open and FAV.binding then
+    -- Waiting for the key to give a row (H): nothing else moves meanwhile.
+    M.navigating = true
+    local msg = FAV.poll_bind(pad_hit(PAD.B))
+    if msg then UI.sound(ctx, M.failed(msg) and "error" or "okay") say(msg) end
+  elseif M.open and was_open then
     if (wml.key_pressed(KEY.back) or pad_hit(PAD.B)) and #M.pages > 0 then
       M.navigating = true
       back_page(ctx)
@@ -564,6 +572,16 @@ function M.input(ctx, tick)
         if repeating("right", r) then adjust(ctx, 1) end
       end
       if not M.navigating and (wml.key_pressed(KEY.enter) or pad_hit(PAD.A)) then activate(ctx) end
+      -- F / Y pins the row to Favorites (or unpins it), H gives it a hotkey.
+      local here = page()
+      if not M.navigating and not (here and here.confirm) then
+        local pin = wml.key_pressed("F") or pad_hit(PAD.Y)
+        if pin or wml.key_pressed("H") then
+          local msg = pin and FAV.toggle_pin(current_item()) or FAV.start_bind(current_item())
+          UI.sound(ctx, M.failed(msg) and "error" or "select")
+          say(msg)
+        end
+      end
       -- A page's button prompts (pg.prompts: { pad = "X", key = "R",
       -- label = "RANDOMIZE" or a function, run = function(ctx, p) }), shown
       -- next to MOVE / CHANGE.
@@ -951,10 +969,12 @@ function M.build_frame(ctx)
     button("A") tip(page() and "ACCEPT" or "SELECT")
     button("B") tip(page() and "RETURN" or "CLOSE")
     for _, pr in ipairs(page() and page().prompts or {}) do button(pr.pad) tip(prompt_label(pr)) end
+    if FAV.can_pin(current_item()) then button("Y") tip(FAV.pinned(current_item()) and "UNPIN" or "PIN") end
   else
     key("ENTER") tx = tx + 2 * K tip(page() and "ACCEPT" or "SELECT")
     key("BACKSPACE") tx = tx + 2 * K tip(page() and "RETURN" or "CLOSE")
     for _, pr in ipairs(page() and page().prompts or {}) do key(pr.key) tx = tx + 2 * K tip(prompt_label(pr)) end
+    if FAV.can_pin(current_item()) then key("F") tx = tx + 2 * K tip(FAV.pinned(current_item()) and "UNPIN" or "PIN") end
   end
   y = y + 26 * K + 8 * K
 
@@ -962,6 +982,7 @@ function M.build_frame(ctx)
   local it = current_item()
   local help = help_text(it.help)
   if it.kind == "value" and help ~= "" and not it.bar then help = help .. "  Default " .. it.fmt(it.default) .. "." end
+  help = help .. FAV.note(it)
   local room = w - 44 * K
   local function fits(l) return #l <= HELP_WIDTH and UI.width(ctx, "thin", l) * help_size <= room end
   local lines = wrap_help(help, fits)
@@ -1058,7 +1079,9 @@ function M.render(tick, hud_hidden)
   end
   -- (tight, so all ten tabs fit the same 90 characters as the help)
   lines[#lines + 1] = "SR TWEAK MENU" .. (F.enabled and "" or "   (all tweaks OFF)")
-  lines[#lines + 1] = table.concat(tabs, "  ")
+  local tab_line = table.concat(tabs, "  ")
+  if #tab_line > HELP_WIDTH then tab_line = table.concat(tabs, " ") end   -- (eleven tabs, with Favorites)
+  lines[#lines + 1] = tab_line
   lines[#lines + 1] = ""
   local cat = F.categories[M.tab]
   local list = view_rows()
@@ -1083,6 +1106,7 @@ function M.render(tick, hud_hidden)
   local it = current_item()
   local help = help_text(it.help)
   if it.kind == "value" and help ~= "" and not it.bar then help = help .. "  Default " .. it.fmt(it.default) .. "." end
+  help = help .. FAV.note(it)
   for _, l in ipairs(wrap_help(help)) do lines[#lines + 1] = l end
   if device == "pad" then
     lines[#lines + 1] = "D-pad move   Left/Right adjust   A select   LB/RB tab   B close" .. (combo_text ~= "" and ("   " .. combo_text .. " close") or "")
@@ -1091,6 +1115,10 @@ function M.render(tick, hud_hidden)
   end
   local extra = {}
   for _, pr in ipairs(page() and page().prompts or {}) do extra[#extra + 1] = (device == "pad" and pr.pad or pr.key) .. " " .. prompt_label(pr):lower() end
+  if FAV.can_pin(it) then
+    extra[#extra + 1] = (device == "pad" and "Y " or "F ") .. (FAV.pinned(it) and "unpin" or "pin")
+    if device ~= "pad" then extra[#extra + 1] = "H hotkey" end
+  end
   if #extra > 0 then lines[#lines + 1] = table.concat(extra, "   ") end
   -- Messages wrap like the help (a long "Show active tweaks" list ran off
   -- the screen), at most STATUS_LINES lines.

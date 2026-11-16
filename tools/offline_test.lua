@@ -41,6 +41,7 @@ do
   local src = io.open(root .. "/mod.ini", "rb"); local data = src:read("a"); src:close()
   local dst = io.open(scratch .. "\\mod.ini", "wb"); dst:write(data); dst:close()
   os.remove(scratch .. "\\saved_tweaks.txt")
+  os.remove(scratch .. "\\saved_presets.lua")
 end
 wml = {
   mod_folder = scratch, mod_name = "test", game = "sr2",
@@ -208,6 +209,57 @@ if arg[1] == "--selftest" then
   assert(imp.run():find("^Imported"))
   assert(F.items.jump.v == true, "import brought the tweak back")
   print("Self-test report, export and import passed")
+  return
+end
+-- Favorites: F pins the row, the tab shows it, F there unpins it; H then a
+-- key gives a row a hotkey that works with the menu closed.
+if arg[1] == "--favorites" then
+  local FAV = require("favorites")
+  local presets = require("presets")
+  assert(F.categories[#F.categories].name == "Favorites")
+  assert(MENU.tab_name() == "Player")
+  local first = MENU.current()
+  press("F")
+  assert(FAV.pinned(first), "F pins the row")
+  press("PAGEUP")
+  assert(MENU.tab_name() == "Favorites" and MENU.current() == first, "the pinned row is on Favorites")
+  press("F")
+  assert(not FAV.pinned(first) and MENU.current().id == "favorites_help", "F on Favorites unpins it")
+  assert(FAV.toggle_pin(F.items.god):find("pinned"))
+  frame()
+  assert(MENU.current() == F.items.god)
+  press("H")
+  assert(FAV.binding == F.items.god)
+  press("F9")   -- (quick_save_key: the menu's own)
+  assert(FAV.binding and MENU.status:find("own keys"), MENU.status)
+  press("BACKSPACE")
+  assert(not FAV.binding and MENU.is_open(), "Backspace cancels the binding, not the menu")
+  press("H") press("F3")
+  assert(presets.all().hotkeys.F3 == "god" and taken.F3 == true, MENU.status)
+  assert(MENU.status:find("F3 now switches God mode"), MENU.status)
+  press("H") press("NUM_4")
+  press("BACKSPACE")
+  press("F5")
+  assert(not MENU.is_open())
+  local god = F.items.god.v
+  local before = #calls
+  press("F3")
+  assert(F.items.god.v ~= god, "the hotkey switched the row")
+  local told = false
+  for i = before + 1, #calls do if calls[i]:find("mission_help_table", 1, true) then told = true end end
+  assert(told, "the hotkey's answer is shown")
+  press("F3")
+  assert(F.items.god.v == god)
+  -- kept: a fresh read of the store has both
+  presets.reload()
+  FAV.refresh()
+  assert(FAV.pinned(F.items.god) and FAV.key_of(F.items.god) == "F3")
+  local pg = F.items.hotkeys.open()
+  assert(pg.rows[1].label == "F3: God mode", pg.rows[1].label)
+  assert(pg.rows[1].run():find("cleared") and taken.F3 == false and not presets.all().hotkeys.F3)
+  local fav = F.items.god
+  assert(FAV.toggle_pin(fav):find("unpinned"))
+  print("Favorites pin and unpin, hotkey binding, reserved keys, cancel, hotkey use and clearing passed")
   return
 end
 if arg[1] == "--customize" then

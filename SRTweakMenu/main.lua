@@ -29,6 +29,9 @@ do
   -- Saved tweaks (Settings > Save tweaks for next time) back on, as SR1 does.
   local okl, errl = pcall(F.load_tweaks)
   if not okl then log("saved tweaks not loaded: " .. tostring(errl)) end
+  -- The Favorites tab (last) and the hotkeys: favorites.lua.
+  local okf, errf = pcall(function() require("favorites").setup(F) end)
+  if not okf then log("favorites failed to load: " .. tostring(errf)) end
   wml.log = log
   if not ok then wml.log("layout failed: " .. tostring(err)) end
   if missing > 0 then wml.log(string.format("layout: %d SR1 rows aren't on Saints Row 2 yet", missing)) end
@@ -151,6 +154,10 @@ wml.on_frame(function()
       or "controller: the game's reads don't come through the wrap; using the script input hold")
   end
   MENU.input(nil, tick)
+  do
+    local ok, err = pcall(require("favorites").frame, MENU.is_open(), MENU.locked)
+    if not ok then wml.log("hotkeys: " .. tostring(err)) end
+  end
   quick_camera(buttons or 0)
   F.set_menu_open(MENU.is_open())
   -- The minimap drew over the menu: hidden while the menu is open (as SR2's own
