@@ -1,3 +1,33 @@
+# 0.5.0
+
+New. None of it has been played in the game yet.
+
+- **Favorites tab** (the last tab, one PgUp or LB from Player). F, or Y on a controller, pins the row you're on; the same button unpins it. A pinned row is the row itself, so it's on or off in both places.
+- **Hotkeys.** H on a switch, choice, list or action, then F1-F12, Num 0-9, Insert, Home, End or Delete. With the menu closed, that key switches the row, steps it to its next option, or presses it. The menu's own keys (menu_key, F7, quick_save_key) can't be given. The key is kept from the game. Settings > Hotkeys lists and clears them. Keyboard only. Whether the game shows the hotkey's message is unconfirmed.
+- **Customize > Saved Looks**: 8 slots for face, body, skin, hair and voice. Clothing isn't saved.
+- **Vehicles > Look > Vehicle Presets**: 4 slots per model for parts and paint.
+- **Customize > Movement > Keep walk style**: puts your walk back when the game resets it to the default.
+- **Player > Bodyguards > Bodyguard weapon**: what new bodyguards carry.
+- **Weapons > Limited Weapons**: one big gun at a time. A second one sends the first to a stash; Swap big gun hands it back. The stash lasts between sessions and is shared by every save. Simpler than SR1's: no trunks or caches.
+- **Vehicles > Toughness > Locked Cars**: nobody can pull you out of the car you're in.
+- **Player > Items** and **Weapons > Give item**: food and drugs into your inventory. Experimental: it isn't known yet whether SR2 takes them this way.
+- **Settings > Run self-test**: checks every game function the menu calls and every page, reads back what Customize, weapons and paint use, and writes TweakMenu\selftest_report.txt. It changes nothing.
+- **Settings > Export settings / Import settings**: your tweaks, saved looks, presets, favorites, hotkeys and menu style in one file, TweakMenu\SRTweakMenu-backup.lua.
+
+Fixed
+
+- Remove Weapon passes the count the game's own scripts pass.
+- Saved tweaks that act when switched (No cops, No gangs, More homies, Freeze time, Letterbox, Render mode and the like) take effect again. They came back showing ON but did nothing until switched off and on. They now act a few seconds after a game loads.
+- Menu background keeps its saved value.
+- Menu background draws its box in the plain text look. It was worked out but never drawn. Unconfirmed in game.
+- Opening the menu while the free camera flies no longer hands W, A, S, D and the menu's other keys back to the game. Typing in the menu drove the car.
+- Draw Distance and Render mode no longer undo each other. Before, the draw distance could stay at x4 with the row reading the game's own.
+- Sky set to Default no longer unfreezes the clock while Freeze time is on, and Freeze time off keeps a chosen Sky held. Sky is saved with your tweaks now, and Restore Game Defaults puts it back to Default.
+- Reopening the menu doesn't reopen Customize Vehicle. It stopped your car dead if you'd driven off.
+- A model list emptied by models that failed to load no longer breaks the game look every frame.
+- Show active tweaks lists rows inside pages under their page, not under "?".
+
+Known, not fixed: Own voice can bring back an older voice after a voice change at the plastic surgeon; with menu_hold_back on, a held Back can reach the game when you get in a car mid-hold; leaving Customize or Emotes resets the game camera mode rather than restoring it.
 # 0.4.16 — 0.4.12 stability base
 
 - Returned the active menu and native host to the 10:17 p.m. 0.4.12 build. The 0.4.13–0.4.15 SR1 animation table import, lookup expansion, native SR1 kick routing and player-only pitch experiment are inactive. Their source and assets are kept in the handoff prerequisites.
