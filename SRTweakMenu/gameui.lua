@@ -34,7 +34,7 @@ UI.FONTS = FONTS
 
 -- Native sizes of the pieces (bitmap_sheets.xtbl), to scale them to a size.
 UI.SIZE = {
-  ui_blank = { 16, 16 },
+  ui_blank = { 16, 16 }, ui_menu_box_base_c = { 18, 18 },
   ui_menu_tmp_dialog_nw = { 113, 44 }, ui_menu_tmp_dialog_n = { 374, 44 }, ui_menu_tmp_dialog_ne = { 119, 44 },
   ui_menu_tmp_dialog_w = { 34, 373 }, ui_menu_tmp_dialog_c = { 16, 16 }, ui_menu_tmp_dialog_e = { 47, 373 },
   ui_menu_tmp_dialog_sw = { 119, 59 }, ui_menu_tmp_dialog_s = { 368, 59 }, ui_menu_tmp_dialog_se = { 119, 59 },
@@ -296,10 +296,12 @@ local function c01(v) return math.max(0, math.min(1, (v or 255) / 255)) end
 -- Once an update: what menu.lua put in UI.frame goes on screen (or the menu
 -- is hidden when there's none).
 function UI.present()
-  if not UI.frame then UI.hide() end
+  -- (the plain text look has only its box, Menu background, to draw)
+  local fr = UI.frame
+  if not fr and UI.backdrop and UI.ok and UI.ready() then fr = { UI.backdrop } end
+  if not fr then UI.hide() end
   if not (installed and root_ok) then return end
   measure_pending()
-  local fr = UI.frame
   if not fr then
     if shown then wml.vint('local U = rawget(_G, "TWK_UI") if U then U.S(false) end') shown = false end
     return

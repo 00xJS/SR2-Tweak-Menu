@@ -37,6 +37,11 @@ do
   if missing > 0 then wml.log(string.format("layout: %d SR1 rows aren't on Saints Row 2 yet", missing)) end
 end
 local MENU = require("menu")
+-- (menu.lua adds rows of its own - Menu background - after the saved tweaks were read)
+do
+  local ok, err = pcall(F.load_tweaks)
+  if not ok then wml.log("saved tweaks not loaded: " .. tostring(err)) end
+end
 local GAMEUI = require("gameui")
 local FREECAM = require("freecam")
 

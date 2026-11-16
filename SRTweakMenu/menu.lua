@@ -266,7 +266,7 @@ local function restore_pages(ctx)
     for _, row in ipairs((view_rows())) do
       if row.kind == "page" and (row.id or row.label) == step.from then it = row break end
     end
-    if not it then return end
+    if not it or it.noresume then return end
     local ok, pg = pcall(it.open, ctx, p, it)
     if not ok or type(pg) ~= "table" then return end
     pg.from = step.from
@@ -878,7 +878,7 @@ function M.build_frame(ctx)
       local value = F.value_text(it)
       if it.kind == "action" then value = it.note and it.note() or "" end
       if it.kind == "list" then
-        value = (it.ok and #it.ok == 0) and "none available" or (it.items[it.v][2] .. "  " .. F.list_position(it))
+        value = ((it.ok and #it.ok == 0) or #it.items == 0) and "none available" or (it.items[it.v][2] .. "  " .. F.list_position(it))
       elseif it.kind == "toggle" then
         value = it.v and "ON" or "OFF"
       elseif value:sub(1, 2) == "< " then

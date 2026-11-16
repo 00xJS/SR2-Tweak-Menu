@@ -137,7 +137,7 @@ function L.apply(F)
               local it = take(id)
               if it then rows[#rows + 1] = it end
             end
-            local pg = { id = e.page, label = e.label, kind = "page", needs = "none", help = e.help,
+            local pg = { id = e.page, label = e.label, kind = "page", needs = "none", help = e.help, page_rows = rows,
               open = function() return { title = e.label, rows = rows } end }
             F.items[e.page] = pg
             placed[e.page] = true

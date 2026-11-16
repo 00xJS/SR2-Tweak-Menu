@@ -146,7 +146,12 @@ function V.setup(features)
         draw_base = base
         write_f32(0x00E98988, base * DRAW_STEPS[F.items.draw_distance.v][2])
       end,
-      off = function() if draw_base then write_f32(0x00E98988, draw_base) draw_base = nil end end },
+      off = function()
+        -- (under Low detail the base comes back when Render mode goes back to Normal)
+        local low = F.items.render_mode and F.items.render_mode.v == 2
+        if draw_base and not low then write_f32(0x00E98988, draw_base) end
+        draw_base = nil
+      end },
     { id = "letterbox", label = "Letterbox", kind = "toggle", needs = "player",
       help = "Cutscene black bars in play. Not with No cutscene black bars.",
       change = function(ctx, p, v, it) wml.call(it.v and 0x0075A4F0 or 0x0075A540, 0) end,
@@ -199,7 +204,7 @@ end
 local saved_draw
 function V.render_mode(n)
   if n == 2 then
-    saved_draw = saved_draw or read_f32(0x00E98988)
+    saved_draw = saved_draw or draw_base or read_f32(0x00E98988)   -- (the game's own, not Draw Distance's)
     write_u8(0x025273B4, 1); write_f32(0x00E98988, 400.0)
   else
     write_u8(0x025273B4, 0)

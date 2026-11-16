@@ -262,6 +262,52 @@ if arg[1] == "--favorites" then
   print("Favorites pin and unpin, hotkey binding, reserved keys, cancel, hotkey use and clearing passed")
   return
 end
+-- Fixes from reading MJQ's 0.4.16: saved rows that act through `change`
+-- take effect after a load; Draw Distance and Render mode, and Sky and
+-- Freeze time, don't undo each other.
+if arg[1] == "--fixes" then
+  press("F5")
+  local function last_call(pattern)
+    for i = #calls, 1, -1 do if calls[i]:find(pattern, 1, true) then return calls[i] end end
+  end
+  local f = assert(io.open(F.SAVE_FILE, "w"))
+  f:write("no_cops=true\nmaster=true\n")
+  f:close()
+  F.load_tweaks()
+  assert(F.items.no_cops.v == true)
+  local before = #calls
+  for _ = 1, 400 do frame() end
+  local applied = false
+  for i = before + 1, #calls do if calls[i]:find("spawning_allow_cop_ambient_spawns(false)", 1, true) then applied = true end end
+  assert(applied, "No cops loaded from saved tweaks was put on in the game")
+  os.remove(F.SAVE_FILE)
+
+  local DD, base = 0x00E98988, 1000.0
+  wml.write_f32(DD, base)
+  local dd, rm = F.items.draw_distance, F.items.render_mode
+  dd.v = dd.max
+  frame()
+  assert(wml.read_f32(DD) > base)
+  rm.v = 2 rm.change(nil, 0x10000000, 0, rm)
+  assert(wml.read_f32(DD) == 400)
+  dd.v = dd.default
+  frame()
+  assert(wml.read_f32(DD) == 400, "Draw Distance's off left Low detail's distance alone")
+  rm.v = 1 rm.change(nil, 0x10000000, 0, rm)
+  assert(wml.read_f32(DD) == base, "Render mode Normal put the game's own distance back: " .. wml.read_f32(DD))
+
+  local freeze, sky = F.items.freeze_clock, F.items.sky_type
+  freeze.v = true freeze.change(nil, 0x10000000, 0, freeze)
+  sky.v = 1 sky.change(nil, 0x10000000, 0, sky)
+  assert(last_call("set_time_of_day_scale("):find("(0.0000)", 1, true), "Sky Default keeps the frozen clock")
+  sky.v = 2 sky.change(nil, 0x10000000, 0, sky)
+  freeze.v = false freeze.off(nil, 0x10000000, 0, freeze)
+  assert(last_call("set_time_of_day_scale("):find("(0.0000)", 1, true), "Freeze off keeps the Sky's held clock")
+  sky.v = 1 sky.change(nil, 0x10000000, 0, sky)
+  assert(last_call("set_time_of_day_scale("):find("(1.0000)", 1, true))
+  print("Saved tweaks applied after a load, draw distance and sky/freeze passed")
+  return
+end
 if arg[1] == "--customize" then
   wr(0x10000000 + 0xD74, 4, 0)
   while MENU.tab_name() ~= "Customize" do press("PAGEDOWN") end

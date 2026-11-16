@@ -93,7 +93,7 @@ F.pad, F.pad_prev = 0, 0
 -- The rows are registered, so their toggles apply like any other.
 function F.page(id, label, help, rows)
   F.register(rows)
-  return { id = id, label = label, kind = "page", needs = "none", help = help,
+  return { id = id, label = label, kind = "page", needs = "none", help = help, page_rows = rows,
     open = function() return { title = label, rows = rows } end }
 end
 
@@ -207,16 +207,34 @@ local menu_open = false
 function F.set_menu_open(open) menu_open = open end
 function F.menu_open() return menu_open end
 
-local last_player = 0
+-- Rows whose saved value (saved_tweaks.txt) differs from how they started
+-- and that act through `change` (No cops, Freeze time, Letterbox...): a value
+-- alone does nothing, so their change runs once a game has been loaded for
+-- a few seconds.
+local pending_change = {}
+local SETTLE = 300   -- updates after a player appears (about 5 s)
+
+local last_player, player_since = 0, 0
 function F.update(ctx)
   F.tick = F.tick + 1
   local p = G.player()
   if p ~= last_player then
     -- A new game (or none): what we put on the old player is gone.
     last_player = p
+    player_since = F.tick
     for id in pairs(was_active) do was_active[id] = nil end
   end
   local v = G.vehicle_handle(p) or 0
+  if p ~= 0 and F.enabled and F.tick - player_since >= SETTLE and next(pending_change) then
+    for id in pairs(pending_change) do
+      local it = F.items[id]
+      if not it then pending_change[id] = nil
+      elseif it.needs ~= "vehicle" or v ~= 0 then
+        pending_change[id] = nil
+        safe(it, it.change, ctx, p, v, it)
+      end
+    end
+  end
   for _, it in pairs(F.items) do
     local on = active(it)
     local ok = it.needs == "none" or (it.needs == "player" and p ~= 0) or (it.needs == "vehicle" and v ~= 0)
@@ -395,9 +413,11 @@ function F.load_tweaks()
     local id, v = line:match("^([%w_]+)=(.*)$")
     local it = id and F.items[id]
     if it and not it.nosave then
+      local before = it.v
       if it.kind == "toggle" then it.v = v == "true"
       elseif it.kind == "value" then it.v = tonumber(v) or it.v
       elseif it.kind == "choice" then local n = tonumber(v) if n and it.options[n] then it.v = n end end
+      if it.change and it.v ~= before then pending_change[id] = true end
     end
   end
   f:close()

@@ -47,10 +47,16 @@ local function put_pose(pos, r, u, f)
 end
 
 local taken = false
+-- (menu.lua's own keys, its TAKEN and MOVE_KEYS: while the menu is open they
+-- stay taken, or typing in the menu would also drive the game)
+local MENU_HELD = { W = true, A = true, S = true, D = true, Q = true, E = true, Z = true, X = true,
+  SPACE = true, SHIFT = true, CTRL = true, ENTER = true }
 local function take_keys(on)
   if taken == on then return end
   taken = on
-  for _, k in ipairs(KEYS) do pcall(wml.take_key, k, on) end
+  for _, k in ipairs(KEYS) do
+    if on or not (FC.menu_open and MENU_HELD[k]) then pcall(wml.take_key, k, on) end
+  end
 end
 local streaming_held = false
 local function hold_streaming(on)
@@ -178,6 +184,7 @@ end
 
 -- Every frame while on. `paused`: the menu is open (the camera holds still).
 function FC.update(paused)
+  FC.menu_open = paused
   if FC.orbiting and not FC.on then update_orbit() return end
   if not FC.on then return end
   local p = G.player()

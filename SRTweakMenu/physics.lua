@@ -163,7 +163,7 @@ function P.setup(features)
   local colour_items = {}
   for _, c in ipairs(COLOURS) do colour_items[#colour_items + 1] = { c[1], c[1] } end
   F.add_rows("Vehicles", nil, {
-    { id = "vehicle_custom", label = "Customize Vehicle", kind = "page", needs = "vehicle",
+    { id = "vehicle_custom", label = "Customize Vehicle", kind = "page", needs = "vehicle", noresume = true,
       help = "Preview and fit parts on your parked vehicle. Use the sticks or I/J/K/L to orbit and the triggers or Z/X to zoom.",
       open = function(ctx, p) return VEHICLE_CUSTOMIZE.page(F, p) end },
     { id = "vehicle_presets", label = "Vehicle Presets", kind = "page", needs = "vehicle",

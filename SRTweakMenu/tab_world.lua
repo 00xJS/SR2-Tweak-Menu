@@ -30,11 +30,15 @@ return function(F, G)
         return "Weather: " .. SHOWN[it.v]
       end },
     { id = "sky_type", label = "Sky", kind = "choice", options = (function() local t = {} for i, s in ipairs(SKIES) do t[i] = s[1] end return t end)(),
-      v = 1, nosave = true,
+      v = 1,
       help = "The sky and lighting of one part of the day, whatever the time. Default follows the clock.",
       change = function(ctx, p, v, it)
         local h = SKIES[it.v][2]
-        if not h then G.lua("set_time_of_day_scale(1.0)") return "The clock runs again" end
+        if not h then
+          local frozen = F.items.freeze_clock and F.items.freeze_clock.v
+          G.lua("set_time_of_day_scale(%s)", frozen and 0.0 or 1.0)
+          return frozen and "Sky follows the clock (still frozen: Freeze time is on)" or "The clock runs again"
+        end
         G.lua("set_time_of_day(%s, 0) set_time_of_day_scale(0.0)", h)
         return "Sky: " .. SKIES[it.v][1]
       end,
@@ -45,8 +49,15 @@ return function(F, G)
       change = function(ctx, p, v, it) if it.v >= 0 then G.lua("set_time_of_day(%s, 0)", math.floor(it.v)) end end },
     { id = "freeze_clock", label = "Freeze time", kind = "toggle",
       help = "The clock stops.",
-      change = function(ctx, p, v, it) G.lua("set_time_of_day_scale(%s)", it.v and 0.0 or 1.0) end,
-      off = function() G.lua("set_time_of_day_scale(1.0)") end },
+      -- (a Sky other than Default holds the clock too)
+      change = function(ctx, p, v, it)
+        local sky = F.items.sky_type and F.items.sky_type.v ~= 1
+        G.lua("set_time_of_day_scale(%s)", (it.v or sky) and 0.0 or 1.0)
+      end,
+      off = function()
+        local sky = F.items.sky_type and F.items.sky_type.v ~= 1
+        G.lua("set_time_of_day_scale(%s)", sky and 0.0 or 1.0)
+      end },
 
     { id = "clear", label = "Clear streets", kind = "toggle",
       help = "No people or traffic spawn.",
