@@ -177,6 +177,39 @@ if arg[1] == "--controls" then
   print("Menu transition lock, navigation, inactive SR1 combat/movement and movement focus passed")
   return
 end
+-- The self-test (Settings > Run self-test) runs to the end and writes its
+-- report; Export then Import settings brings the same tweaks back.
+if arg[1] == "--selftest" then
+  local H = require("healthcheck")
+  local names = H.called_names({ 'G.lua("inv_item_add_do(%s) tweak_out(type(rawget(_G, x)))") s.cash_add(1)',
+    'G.vint([[local function own_fn(a) end own_fn(1) pcr_set_voice("x", false) Help (here) rawset(_G, "TWK_a", nil)]])' })
+  assert(table.concat(names, " ") == "inv_item_add_do pcr_set_voice tweak_out", table.concat(names, " "))
+  wr(0x10000000 + 0xD74, 4, 0)
+  local report = H.REPORT
+  os.remove(report)
+  assert(H.start(F):find("running"))
+  local n = 0
+  while H.status():find("^RUNNING") and n < 5000 do frame() n = n + 1 end
+  assert(not H.status():find("^RUNNING"), "the self-test never finished")
+  local f = assert(io.open(report, "r"), "no report")
+  local text = f:read("a") f:close()
+  assert(text:find("== Game functions the menu calls ==", 1, true) and text:find("== Pages ==", 1, true)
+    and text:find("pages opened", 1, true) and text:find("Try by hand", 1, true), text)
+  local listed = tonumber(text:match("(%d+) names found"))
+  assert(listed and listed > 50, "too few game functions found: " .. tostring(listed))
+  print("self-test: " .. n .. " frames, " .. listed .. " game functions, " .. H.status())
+
+  local B = require("backup")
+  F.items.jump.v = true
+  assert(B.export(F):find("^Exported"))
+  F.items.jump.v = false
+  local imp = F.items.import_settings
+  assert(imp.run():find("Press again"))
+  assert(imp.run():find("^Imported"))
+  assert(F.items.jump.v == true, "import brought the tweak back")
+  print("Self-test report, export and import passed")
+  return
+end
 if arg[1] == "--customize" then
   wr(0x10000000 + 0xD74, 4, 0)
   while MENU.tab_name() ~= "Customize" do press("PAGEDOWN") end

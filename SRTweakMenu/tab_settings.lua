@@ -16,6 +16,10 @@ return function(F, G)
       help = "The menu starts with every tweak off again.",
       run = function() return F.forget_tweaks() end },
 
+    require("healthcheck").row(F),
+    require("backup").export_row(F),
+    require("backup").import_row(F),
+
     { id = "unlock_cribs", label = "Unlock buying cribs", kind = "action",
       help = "Lets you buy cribs (the game's own crib unlock).",
       run = function() G.lua("crib_purchasing_unlock()") return "Cribs can be bought" end },

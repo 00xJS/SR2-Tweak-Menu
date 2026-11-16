@@ -39,7 +39,11 @@ game.WEIGHT_SLOTS = WEIGHT_SLOTS; game.assert = assert; game.tostring = tostring
 setmetatable(game, { __newindex = function(_, k) error("new global " .. tostring(k)) end })
 
 local P = 0x10000000
+local scratch = (os.getenv("TEMP") or ".") .. "\\sr2_tweak_menu_test"
+os.execute('mkdir "' .. scratch .. '" 2>nul')
+os.remove(scratch .. "\\saved_presets.lua")
 wml = {
+  mod_folder = scratch,
   log = function() end,
   read_u8 = function(a) return rd(a, 1) end, read_u16 = function(a) return rd(a, 2) end,
   read_u32 = function(a) return rd(a, 4) end, read_f32 = function() return 0 end,

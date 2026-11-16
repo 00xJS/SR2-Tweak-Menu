@@ -52,6 +52,8 @@ function S.all()
   return data
 end
 
+function S.reload() data = nil end
+
 function S.write()
   local out = { "-- SR Tweak Menu: saved looks and vehicle presets. Written by the menu.\nreturn " }
   quote(S.all(), out, 0)

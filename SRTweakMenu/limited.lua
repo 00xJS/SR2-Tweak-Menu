@@ -15,10 +15,12 @@
 --   sprint_set_local_use_override(ms), sprint_reset_local_overrides()
 --
 -- There are no trunks, caches or prompts: a big gun that is taken goes to
--- a stash the menu keeps (names only, until the game is closed), and Swap
--- big gun hands the oldest one back. Its ammo is not kept. The cash safe
+-- a stash the menu keeps in saved_presets.lua (names only, so it outlasts
+-- the game closing, but is shared by every save), and Swap big gun hands
+-- the oldest one back. Its ammo is not kept. The cash safe
 -- is left out: the scripts can add and remove cash but not read it.
 
+local presets = require("presets")
 local L = {}
 
 local SLOTS = { "melee", "pistol", "smg", "shotgun", "rifle", "launcher", "thrown" }
@@ -35,7 +37,12 @@ local READ = 'local function s(n) local w = inv_item_in_slot(LOCAL_PLAYER, n) '
   .. 'local e = inv_item_get_equipped_item(LOCAL_PLAYER) if e == nil or e == "" then e = "none" end tweak_out(e)'
 
 function L.rows(F, G)
-  local stash = {}   -- big guns taken away, oldest first
+  -- Big guns taken away, oldest first.
+  local function stash()
+    local all = presets.all()
+    all.loadout_stash = type(all.loadout_stash) == "table" and all.loadout_stash or {}
+    return all.loadout_stash
+  end
   local last         -- slot -> weapon at the last look, to tell which is new
   local sprint_ms    -- the sprint length set, nil while it is the game's own
 
@@ -53,8 +60,10 @@ function L.rows(F, G)
   end
 
   local function stashed(name)
-    for _, w in ipairs(stash) do if w == name then return end end
-    stash[#stash + 1] = name
+    local list = stash()
+    for _, w in ipairs(list) do if w == name then return end end
+    list[#list + 1] = name
+    presets.write()
   end
 
   -- The big-gun slot to keep: one filled since the last look (a pickup or
@@ -94,7 +103,7 @@ function L.rows(F, G)
 
   return {
     { id = "loadout", label = "Limited Weapons", kind = "toggle", needs = "player", every = 30,
-      help = "One big gun: of shotgun, rifle and launcher you keep the one you got last, the others go to the menu's stash (Swap big gun). What you carry weighs on your sprint. The stash keeps no ammo and is lost when the game closes.",
+      help = "One big gun: of shotgun, rifle and launcher you keep the one you got last, the others go to the menu's stash (Swap big gun). What you carry weighs on your sprint. The stash keeps no ammo and is shared by all your saves.",
       update = update,
       off = function()
         last = nil
@@ -104,10 +113,11 @@ function L.rows(F, G)
     { id = "loadout_swap", label = "Swap big gun", kind = "action", needs = "player", nosave = true,
       help = "Puts the big gun you carry in the stash and hands you the one stashed longest. It comes back with the ammo of a new one.",
       run = function()
-        if #stash == 0 then return "No big gun in the stash" end
+        if #stash() == 0 then return "No big gun in the stash" end
         local cur = carried()
         if not cur then return "Can't reach your weapons right now" end
-        local name = table.remove(stash, 1)
+        local name = table.remove(stash(), 1)
+        presets.write()
         for _, s in ipairs(BIG) do
           if cur[s] then
             G.lua("inv_item_remove_in_slot(%s, LOCAL_PLAYER)", s)
@@ -119,7 +129,7 @@ function L.rows(F, G)
         -- The next look takes what it finds as it is, so the gun just
         -- given is not read as a new pickup.
         last = nil
-        return "Took the " .. name .. " (" .. #stash .. " in the stash)"
+        return "Took the " .. name .. " (" .. #stash() .. " in the stash)"
       end },
   }
 end

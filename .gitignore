@@ -1,3 +1,5 @@
 build/
 SRTweakMenu/saved_tweaks.txt
 SRTweakMenu/saved_presets.lua
+SRTweakMenu-backup.lua
+selftest_report.txt

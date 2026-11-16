@@ -194,6 +194,7 @@ function F.on(id) return F.enabled and F.items[id] and F.items[id].v end
 -- Called every game update, after the menu has read its input.
 F.tick = 0
 local update_errors = {}
+F.errors = update_errors   -- (the self-test lists them)
 local function safe(it, fn, ...)
   local ok, err = pcall(fn, ...)
   if not ok and not update_errors[it.id] then
@@ -368,15 +369,22 @@ end
 -- (id=value), in saved_tweaks.txt next to mod.ini. Rows marked nosave, and
 -- actions, aren't saved.
 F.SAVE_FILE = wml.mod_folder .. "\\saved_tweaks.txt"
+-- Every saved row as saved_tweaks.txt holds it, and how many.
+function F.tweaks_text()
+  local lines = {}
+  for id, it in pairs(F.items) do
+    if not it.nosave and (it.kind == "toggle" or it.kind == "value" or it.kind == "choice") then
+      lines[#lines + 1] = id .. "=" .. tostring(it.v)
+    end
+  end
+  table.sort(lines)
+  return table.concat(lines, "\n") .. (#lines > 0 and "\n" or ""), #lines
+end
 function F.save_tweaks()
   local f = io.open(F.SAVE_FILE, "w")
   if not f then return "Couldn't write " .. F.SAVE_FILE end
-  local n = 0
-  for id, it in pairs(F.items) do
-    if not it.nosave and (it.kind == "toggle" or it.kind == "value" or it.kind == "choice") then
-      f:write(id, "=", tostring(it.v), "\n"); n = n + 1
-    end
-  end
+  local text, n = F.tweaks_text()
+  f:write(text)
   f:close()
   return "Saved " .. n .. " tweaks for next time"
 end
