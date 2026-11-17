@@ -226,7 +226,7 @@ return function(F, G)
           G.lua("if not T.own_persona then T.own_persona = character_get_persona(LOCAL_PLAYER) end character_set_persona(LOCAL_PLAYER, %s)", F.model_voice)
           return "The model's own voice"
         end
-        G.lua("if T.own_persona then character_set_persona(LOCAL_PLAYER, T.own_persona) end")
+        G.lua("if T.own_persona then character_set_persona(LOCAL_PLAYER, T.own_persona) T.own_persona = nil end")
         return "Your own voice"
       end
       F.voice_chosen = true

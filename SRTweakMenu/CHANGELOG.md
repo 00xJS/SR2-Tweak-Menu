@@ -26,8 +26,10 @@ Fixed
 - Reopening the menu doesn't reopen Customize Vehicle. It stopped your car dead if you'd driven off.
 - A model list emptied by models that failed to load no longer breaks the game look every frame.
 - Show active tweaks lists rows inside pages under their page, not under "?".
+- Own voice brings back your voice as it is now, not one from before a change at the plastic surgeon.
+- With menu_hold_back on, a Back held into a car (or a cutscene) no longer reaches the game and opens the map.
+- Leaving Customize or Emotes puts back the camera mode you had, not always the default one.
 
-Known, not fixed: Own voice can bring back an older voice after a voice change at the plastic surgeon; with menu_hold_back on, a held Back can reach the game when you get in a car mid-hold; leaving Customize or Emotes resets the game camera mode rather than restoring it.
 # 0.4.16 — 0.4.12 stability base
 
 - Returned the active menu and native host to the 10:17 p.m. 0.4.12 build. The 0.4.13–0.4.15 SR1 animation table import, lookup expansion, native SR1 kick routing and player-only pitch experiment are inactive. Their source and assets are kept in the handoff prerequisites.

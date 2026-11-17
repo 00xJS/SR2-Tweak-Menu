@@ -6,10 +6,15 @@ function H.new(seconds)
 end
 function H.update(h, down, now, eligible, menu_open)
   if not eligible then
+    -- (a hold that began while eligible stays hidden until it's let go: getting
+    -- in a car mid-hold mustn't hand the rest of Back to the game, its map)
+    local holding = h.started ~= nil or h.hiding
     h.started, h.fired, h.tap = nil, nil, nil
     h.blocked = down -- release before rearming after a pause/disconnect
-    return false, false, down and menu_open
+    h.hiding = down and (menu_open or holding) or nil
+    return false, false, h.hiding == true
   end
+  h.hiding = nil
   if h.blocked then
     if not down then h.blocked = nil end
     return false, false, down

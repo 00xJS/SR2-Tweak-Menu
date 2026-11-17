@@ -12,7 +12,7 @@ fonts and sounds).
 **Status: preview (0.5.0).** Every row passes the offline test, but most
 haven't been played in the game yet, so expect rough edges. Everything new in
 0.4 and 0.5 is untested in game (see `SRTweakMenu/CHANGELOG.md`). Settings >
-Run self-test checks what it can in your game and writes a report. Some SR1
+Run self-test checks what it can in your game and writes a report. `TESTING.md` is the checklist for playing it through. Some SR1
 rows have no SR2 version (see the end). Bug reports are welcome in Issues.
 
 **Offline only.** Use it in single player. Don't use it in co-op or online

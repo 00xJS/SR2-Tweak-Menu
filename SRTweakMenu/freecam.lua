@@ -124,7 +124,10 @@ function FC.orbit(on, facing, movement)
     FC.orbiting = false
     FC.orbit_movement = nil
     FC.zoom = 1.0
-    if not FC.on then write_u32(CAM_MODE, G.in_cutscene() and 5 or 0) end
+    -- (the mode you had back, unless it was the orbit's own or a cutscene's that has ended)
+    local back = FC.saved_mode
+    if back == nil or back == 2 or back == 5 then back = 0 end
+    if not FC.on then write_u32(CAM_MODE, G.in_cutscene() and 5 or back) end
   end
   return FC.orbiting
 end

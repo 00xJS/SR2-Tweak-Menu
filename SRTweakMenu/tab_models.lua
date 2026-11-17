@@ -60,7 +60,7 @@ return function(F, G)
       if e.voice then
         G.lua("if not T.own_persona then T.own_persona = character_get_persona(LOCAL_PLAYER) end character_set_persona(LOCAL_PLAYER, %s)", e.voice)
       else
-        G.lua("if T.own_persona then character_set_persona(LOCAL_PLAYER, T.own_persona) end")
+        G.lua("if T.own_persona then character_set_persona(LOCAL_PLAYER, T.own_persona) T.own_persona = nil end")
       end
     end
     return "You're " .. e[2] .. (e.voice and not F.voice_chosen and " (with their voice)" or "")
@@ -87,7 +87,7 @@ return function(F, G)
         pending = nil
         ENGINE.restore_player()
         F.model_voice = nil
-        if not F.voice_chosen then G.lua("if T.own_persona then character_set_persona(LOCAL_PLAYER, T.own_persona) end") end
+        if not F.voice_chosen then G.lua("if T.own_persona then character_set_persona(LOCAL_PLAYER, T.own_persona) T.own_persona = nil end") end
         return "You're you again"
       end },
     { id = "models_forget_failed", label = "Bring Back Left-Out Models", kind = "action", needs = "none",
