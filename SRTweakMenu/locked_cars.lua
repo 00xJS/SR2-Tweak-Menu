@@ -4,14 +4,14 @@
 -- scripts can't do that: their vehicle calls take a script name, the menu
 -- has no way to name a car nobody it knows sits in, and no call refuses
 -- one car to the player. What the scripts do have is the lock missions put
--- on their own cars, set_unjackable_flag(vehicle, on): nobody can be pulled
--- out of it. So this is the lock the other way round: your car is locked
--- against everybody else.
+-- on their own cars, set_unjackable_flag(vehicle, on). Missions use it to
+-- keep the player out of a car (it sets the bit the game's search for a car
+-- to get into skips, vehicle+0x9539 bit 0x20), so it's on only while you sit
+-- in the car: nobody can take it from you. It's lifted the moment you get
+-- out, or you'd be locked out of your own car.
 --
 -- The car is known by the name get_char_vehicle_name gives while you sit in
--- it. That name is kept in the game's Lua (T.locked_car), so the car stays
--- locked after you step out and is unlocked when you take another car or
--- switch the row off.
+-- it, kept in the game's Lua (T.locked_car) to unlock it again.
 
 local L = {}
 
@@ -26,11 +26,9 @@ local UNLOCK = "if T.locked_car then local c = T.locked_car T.locked_car = nil "
 function L.rows(F, G)
   return {
     { id = "locked_cars", label = "Locked Cars", kind = "toggle", needs = "player", every = 30,
-      help = "Your car is locked: nobody can pull you out of it or take it. The last car you drove stays locked until you get into another or switch this off.",
-      -- Only in a vehicle: on foot there is no name to ask for, and the car
-      -- you left keeps its lock by itself.
+      help = "While you drive, your car is locked: nobody can pull you out of it. It unlocks when you get out.",
       update = function(ctx, p)
-        if G.vehicle_handle(p) then G.vehicle_lua(LOCK) end
+        if G.vehicle_handle(p) then G.vehicle_lua(LOCK) else G.lua(UNLOCK) end
       end,
       off = function() G.lua(UNLOCK) end },
   }

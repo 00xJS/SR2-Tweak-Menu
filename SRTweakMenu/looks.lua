@@ -2,8 +2,16 @@
 -- sliders, skin color, hair (with its colors) and voice, kept in a slot and
 -- put back later. Everything goes through the calls the Customize pages use
 -- (face_body.lua, hair.lua); a look is applied a few changes a frame, waiting
--- for the game to finish streaming in between. Clothing isn't part of a look:
--- the menu can put items on but has no way yet to read what is worn.
+-- for the game to finish streaming in between.
+--
+-- Clothing, jewelry and tattoos: the clothing store's own calls (interface
+-- state). pcu_get_slot_info(slot) reads what a slot wears (item, variant,
+-- colours, wear option, logo); loading takes everything off with
+-- pcu_remove_clothing (it leaves hair, tattoos and the underwear the game
+-- insists on) and puts each item back with pcu_set_slot_info, one at a time,
+-- waiting for streaming. Items are kept by index and by name, so a look still
+-- finds its items if a table mod moves them. Tattoos are added, not taken off.
+-- Read in the game's code, not yet tried in play.
 local G = require("game")
 local body = require("face_body")
 local barber = require("hair")
@@ -15,6 +23,53 @@ local SETS = { "global gender", "global body",
 -- The body controls aren't in the sets' own reports (Body Type names them).
 local NAMED = { ["global gender"] = { "body gender" }, ["global body"] = { "body fat", "body muscle", "old" } }
 local AREAS = 5   -- head hair, mustache, beard, sideburns, eyebrows (0-4)
+
+-- The customization slots kept: 6-37 (tie to piercings), 41 suit, 44 and
+-- 48-72 tattoos. (0-4 hair is the barber's; 5 eyelashes, 38-40 eyes,
+-- stubble, teeth, 42-43 privacy bars, 45-47 make-up and 73+ are left alone.)
+local CLOTH_CAPTURE = [[
+local out, n = {}, 0
+for s = 6, 72 do
+  if s <= 37 or s == 41 or s == 44 or s >= 48 then
+    local slot, item, _, _, _, var, _, _, nc, c0, _, _, _, c1, _, _, _, c2,
+      _, _, _, _, wear, _, _, _, logo, _, _, logoc = pcu_get_slot_info(s)
+    if slot and slot >= 0 and item then
+      n = n + 1
+      out[n] = string.format("%d,%d,%d,%d,%d,%d,%d,%d,%d,%d", s, item, var or 0, nc or 0,
+        c0 or -1, c1 or -1, c2 or -1, wear or 0, logo or -1, logoc or -1)
+    end
+  end
+end
+tweak_out(n, table.concat(out, ";"))]]
+-- The item table: 0x78-byte records from 0x029E8CD0 (count at 0x025288D8), the name at +8.
+local ITEMS, ITEM_SIZE, ITEM_COUNT = 0x029E8CD0, 0x78, 0x025288D8
+local function item_name(index)
+  if index < 0 or index >= wml.read_u32(ITEM_COUNT) then return nil end
+  local ptr = wml.read_u32(ITEMS + index * ITEM_SIZE + 8)
+  return ptr ~= 0 and wml.read_string(ptr) or nil
+end
+-- The saved item's index now: where it was, or found again by its name.
+local function item_index(entry)
+  if not entry.name or entry.name == "" then return entry[2] end
+  if item_name(entry[2]) == entry.name then return entry[2] end
+  for i = 0, math.min(wml.read_u32(ITEM_COUNT), 20000) - 1 do
+    if item_name(i) == entry.name then return i end
+  end
+end
+local function capture_clothes()
+  local ok, n, packed = G.vint(CLOTH_CAPTURE)
+  if not ok or type(n) ~= "number" or type(packed) ~= "string" then return nil end
+  local clothes = {}
+  for e in packed:gmatch("[^;]+") do
+    local t = {}
+    for v in e:gmatch("-?%d+") do t[#t + 1] = math.tointeger(tonumber(v)) end
+    if #t == 10 then
+      t.name = item_name(t[2])
+      clothes[#clothes + 1] = t
+    end
+  end
+  return clothes
+end
 local job, last
 
 local function usable(p)
@@ -43,6 +98,7 @@ function L.capture(p)
   end
   local _, voice = G.vint("tweak_out(pcr_get_current_voice_number())")
   if type(voice) == "number" and body.VOICES[voice + 1] then look.voice = voice end
+  look.clothes = capture_clothes()
   return look
 end
 
@@ -94,6 +150,30 @@ local function steps(p, look)
       if L.F then L.F.voice_chosen = nil end
       return "changed"
     end)
+  end
+  -- Clothing last (the body decides which wear options fit). Looks saved
+  -- before clothing was kept have none, and keep what you wear.
+  if type(look.clothes) == "table" then
+    add(function()
+      local ok = G.vint("pcu_wear_current_clothing() pcu_clear_preview_slot() pcu_remove_clothing() tweak_out(true)")
+      return ok and "changed" or "retry"
+    end)
+    local function opt(v) return v >= 0 and tostring(v) or "nil" end
+    for _, t in ipairs(look.clothes) do
+      add(function()
+        local index = item_index(t)
+        if not index then return "missing" end
+        local _, slot_now, item_now = G.vint(("tweak_out(pcu_get_slot_info(%d))"):format(t[1]))
+        if slot_now == t[1] and item_now == index then return "same" end
+        local ok = G.vint(("pcu_set_slot_info(%d, %d, %d, %d, %s, %s, %s, %d, %d, %d, false) tweak_out(true)")
+          :format(t[1], index, t[3], t[4], opt(t[5]), opt(t[6]), opt(t[7]), t[8], t[9], t[10]))
+        if not ok then return "retry" end
+        _, slot_now, item_now = G.vint(("tweak_out(pcu_get_slot_info(%d))"):format(t[1]))
+        -- (the game refuses an item quietly: one this body can't wear, say)
+        return item_now == index and "changed" or "missing"
+      end)
+    end
+    add(function() G.vint("pcu_wear_current_clothing()") return "same" end)
   end
   return list
 end
@@ -151,7 +231,7 @@ end
 function L.row(F)
   L.F = F
   return { label = "Saved Looks", kind = "page",
-    help = "Keep your face, body, skin, hair and voice in a slot and put them back later. Clothing is not included.",
+    help = "Keep your face, body, skin, hair, voice and clothing in a slot and put them back later.",
     open = function(_, p)
       last = nil
       return presets.page({ title = "Saved Looks", noun = "Look", slots = 8,
@@ -163,8 +243,8 @@ function L.row(F)
         capture = function() return L.capture(G.player()) end,
         apply = function(look) return L.apply(G.player(), look) end,
         status = L.status,
-        save_help = "Saves your face and body sliders, skin color, hair and voice. Clothing is not included.",
-        load_help = "Puts the saved look on your character. It takes a few seconds; stay on foot.",
+        save_help = "Saves your face and body sliders, skin color, hair, voice, and the clothing, jewelry and tattoos you wear.",
+        load_help = "Puts the saved look on your character, clothes included. It takes a few seconds; stay on foot. Items this body can't wear are skipped.",
       })
     end }
 end

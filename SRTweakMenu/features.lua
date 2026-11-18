@@ -113,7 +113,7 @@ end
 -- Features in modules of their own: { module, tab, which of its rows } (all when nil).
 for _, extra in ipairs({
   { "limited", "Weapons" }, { "locked_cars", "Vehicles" },
-  { "food_items", "Player", { items = true } }, { "food_items", "Weapons", { give_item = true, give_item_count = true } },
+  { "food_items", "Player", { items = true } }, { "cash_safe", "Player" }, { "food_items", "Weapons", { give_item = true, give_item_count = true } },
 }) do
   local ok, err = pcall(function()
     local rows = {}

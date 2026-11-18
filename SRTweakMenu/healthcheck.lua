@@ -325,6 +325,10 @@ local function steps(F)
     say("  Bodyguard weapon: pick the AR-200, spawn a bodyguard, see what they hold.")
     say("  Favorites: F (or Y) on God mode, then PgUp from Player: it's on the Favorites tab.")
     say("  Hotkeys: H on God mode, then F3; close the menu, press F3. Does a message show top left?")
+    say("  Saved Looks: save in one outfit, change clothes, load: the outfit comes back.")
+    say("  Customize > Clothing: wear something, then try a clothing store and the crib wardrobe.")
+    say("  Fine Aim zoom x0.5, Bloom 0, Camera side offset +0.5: each shows (aim, a street light, running).")
+    say("  Cash safe: deposit and withdraw; with Limited Cash on, die carrying cash.")
   end)
   return list
 end

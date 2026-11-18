@@ -18,9 +18,12 @@ local Q = {}
 local F
 
 -- ---------------------------------------------------------------- helpers
-local CELL = wml.buffer(15)
+-- (the upper half of scratch slot 15: other modules use its start as scratch
+-- for a moment, and these cells are read by the game's code every frame)
+local CELL = wml.buffer(15) + 512
 -- +0 f64 FOV factor | +8 f64 auto-center ms/s, moving | +16 f64 the same, stopped
 -- +24 f32 swing-back speed | +28 f32 mouse X | +32 f32 mouse Y | +36 f32 minimap angle | +40 f32 pause map angle
+-- +48 f32 bloom strength | +52 f32 bloom radius
 local function a32(a) return string.pack("<I4", a) end
 local function write_f64(a, x)
   local lo, hi = string.unpack("<I4I4", string.pack("<d", x))
@@ -30,8 +33,27 @@ end
 -- Patch sets: { address, original bytes, our bytes }. Applied once when a
 -- row comes on, put back when it goes off.
 local applied = {}
+local function code_at(a, n)
+  local t = {}
+  for i = 0, n - 1 do t[#t + 1] = string.char(read_u8(a + i)) end
+  return table.concat(t)
+end
+local refused = {}
 local function apply(name, set, on)
   if (applied[name] or false) == on then return end
+  if on then
+    -- (code that isn't what the patch was made for - another mod's - is left alone)
+    for _, e in ipairs(set) do
+      local now = code_at(e[1], #e[2])
+      if now ~= e[2] and now ~= e[3] then
+        if not refused[name] then
+          refused[name] = true
+          wml.log(string.format("%s: the game's code at %08X isn't what the menu expects (another mod?); not changed", name, e[1]))
+        end
+        return
+      end
+    end
+  end
   applied[name] = on
   for _, e in ipairs(set) do wml.patch(e[1], on and e[3] or e[2]) end
 end
@@ -234,6 +256,108 @@ end
 local menu_since   -- when the main menu (no game loaded) was first seen
 local last_save_done = false
 
+-- ---------------------------------------------------------------- aiming, bloom, the shoulder camera
+-- The camera mode (0x00E9A5BC): 0 on foot, 1/2/0x17 running/indoor/sprint,
+-- 0x10 Fine Aim, 0x11 Fine Aim crouched. Each mode's camera row is
+-- 0x025F6318 + mode * 0x2C (+0x04 height, +0x14 FOV in degrees, +0x28 side
+-- offset); the game reads a row when it changes mode, so a change shows the
+-- next time the camera changes mode. The camera's live copy (0x00E9A638, the
+-- same layout) is read every frame.
+local CAM_TABLE, CAM_LIVE, CAM_ROW = 0x025F6318, 0x00E9A638, 0x2C
+local function cam_mode() return read_u32(FP_STATE) end
+local function aiming() local m = cam_mode() return m == 0x10 or m == 0x11 end
+local fsaved = {}
+local function hold_f32(addr, on, value)
+  if on then
+    if fsaved[addr] == nil then fsaved[addr] = read_f32(addr) end
+    write_f32(addr, value)
+  elseif fsaved[addr] ~= nil then write_f32(addr, fsaved[addr]); fsaved[addr] = nil end
+end
+-- The game's own value of something held.
+local function own_f32(addr) if fsaved[addr] ~= nil then return fsaved[addr] end return read_f32(addr) end
+local function value_on(id)
+  local it = F.items[id]
+  return F.enabled and it and math.abs(it.v - it.default) > 1e-6 and it.v or nil
+end
+
+-- Fine Aim zoom: the two Fine Aim rows' FOV times the row (lower = closer).
+local AIM_MODES = { 0x10, 0x11 }
+local function aim_zoom_frame()
+  local k = value_on("fine_aim_zoom")
+  for _, m in ipairs(AIM_MODES) do
+    local a = CAM_TABLE + m * CAM_ROW + 0x14
+    hold_f32(a, k ~= nil, k and own_f32(a) * k)
+  end
+end
+
+-- Fine Aim spread: the held gun's Fine Aim spread multiplier (its record
+-- +0x1BC, scaling its min and max spread while you aim; the record as
+-- gameplay.lua's held_weapon finds it). Only your aim uses it.
+local spread_rec
+local function held_record(p)
+  if p == 0 then return nil end
+  local item = read_u32(p + 0x10CC); if item == 0 then return nil end
+  local w = read_u32(item + 0xC4); if w == 0 then return nil end
+  local rec = read_u32(w + 8)
+  return rec ~= 0 and rec or nil
+end
+local function aim_spread_frame(p)
+  local k = value_on("fine_aim_spread")
+  local rec = k and held_record(p) or nil
+  if spread_rec and spread_rec ~= rec then hold_f32(spread_rec + 0x1BC, false) end
+  spread_rec = rec
+  if rec then hold_f32(rec + 0x1BC, true, own_f32(rec + 0x1BC) * k) end
+end
+
+-- Turn speed: Camera turn speed always, Fine Aim turn speed on top while you
+-- aim. The mouse through the two cells; the stick through the camera's pan
+-- speeds (horizontal 0x00E99978 / 0x00E99980, vertical 0x00E9997C /
+-- 0x00E99984), scaled only while aiming.
+local PAN = { 0x00E99978, 0x00E99980, 0x00E9997C, 0x00E99984 }
+local function turn_frame()
+  local cam = value_on("camera_turn") or 1
+  local aim_k = value_on("fine_aim_turn")
+  local aim = aim_k ~= nil and aiming()
+  local k = cam * (aim and aim_k or 1)
+  if k ~= 1 then mouse_cells(k) apply("camera_turn", MOUSE, true) else apply("camera_turn", MOUSE, false) end
+  for _, a in ipairs(PAN) do hold_f32(a, aim, aim and own_f32(a) * aim_k) end
+end
+
+-- Bloom: the time of day's bloom strength and radius scales (0x00E99698,
+-- 0x00E99690; worked out again every frame) are loaded by two instructions
+-- that build the frame's bloom request; pointed at two cells, the row scales
+-- them. 0 switches bloom off (no radius: the renderer skips it).
+local BLOOM = {
+  { 0x004DA3E4, "\xD9\x05\x98\x96\xE9\x00", "\xD9\x05" .. a32(CELL + 48) },
+  { 0x004DA379, "\xD9\x05\x90\x96\xE9\x00", "\xD9\x05" .. a32(CELL + 52) },
+}
+local function bloom_frame()
+  local k = value_on("bloom")
+  if not k then apply("bloom", BLOOM, false) return end
+  write_f32(CELL + 48, read_f32(0x00E99698) * k)
+  write_f32(CELL + 52, k > 0 and read_f32(0x00E99690) or 0)
+  apply("bloom", BLOOM, true)
+end
+
+-- Over the shoulder: the on-foot camera rows (standing, running, indoors,
+-- sprinting) moved sideways and up; the live copy follows while in one.
+local FOOT_MODES = { [0] = true, [1] = true, [2] = true, [0x17] = true }
+local function shoulder_frame()
+  local side, up = value_on("shoulder_offset"), value_on("camera_height")
+  for m in pairs(FOOT_MODES) do
+    local row = CAM_TABLE + m * CAM_ROW
+    hold_f32(row + 0x28, side ~= nil, side and own_f32(row + 0x28) + side)
+    hold_f32(row + 0x04, up ~= nil, up and own_f32(row + 0x04) + up)
+  end
+  local m = cam_mode()
+  if FOOT_MODES[m] and (side or up or fsaved.shoulder_live) then
+    local row = CAM_TABLE + m * CAM_ROW
+    write_f32(CAM_LIVE + 0x28, read_f32(row + 0x28))
+    write_f32(CAM_LIVE + 0x04, read_f32(row + 0x04))
+    fsaved.shoulder_live = (side or up) and true or nil
+  end
+end
+
 -- ---------------------------------------------------------------- the rows
 function Q.setup(features)
   F = features
@@ -256,6 +380,13 @@ function Q.setup(features)
     patch_row("reload_sprint", "Reload while sprinting", "Reload on the run, as in SR1.", SPRINT_RELOAD, S("reload_while_sprinting", false)),
     patch_row("switch_any", "Switch weapons any time", "Change weapons while sprinting and in other moves the game blocks.",
       SWITCH_ANY, S("weapon_switch_any_time", false)),
+    -- (applied every frame in Q.after_update)
+    { id = "fine_aim_zoom", label = "Fine Aim zoom", kind = "value", needs = "none", default = 1.0, min = 0.3, max = 1.5, step = 0.05,
+      fmt = F.fmtx, help = "How close Fine Aim (the aim button) brings the camera: lower is closer (x1 = the game's own). Shows from your next aim." },
+    { id = "fine_aim_spread", label = "Fine Aim spread", kind = "value", needs = "none", default = 1.0, min = 0, max = 1.5, step = 0.05,
+      fmt = F.fmtx, help = "How much your gun's shots spread while you aim with it (x0 = dead on, x1 = the game's own). Your aim only." },
+    { id = "fine_aim_turn", label = "Fine Aim turn speed", kind = "value", needs = "none", default = 1.0, min = 0.1, max = 2.0, step = 0.05,
+      fmt = F.fmtx, help = "How fast the mouse and stick turn while you aim (x1 = as when not aiming). Lower steadies the aim." },
   })
 
   F.add_rows("Vehicles", nil, {
@@ -314,9 +445,16 @@ function Q.setup(features)
       help = "Where the camera sits: lower is further into you (-0.6 = your eyes, about), higher pulls it back out over your shoulder." },
     { id = "camera_turn", label = "Camera turn speed", kind = "value", needs = "none", default = 1.0, min = 0.5, max = 2.0, step = 0.1,
       fmt = F.fmtx, v = S("camera_turn_speed", 1.0),
-      help = "How fast the mouse turns the camera, on top of the game's own sensitivity (Options > Controls).",
-      update = function(ctx, p, v, it) mouse_cells(it.v); apply("camera_turn", MOUSE, true) end,
-      off = function() apply("camera_turn", MOUSE, false) end },
+      help = "How fast the mouse turns the camera, on top of the game's own sensitivity (Options > Controls)." },
+    { id = "shoulder_offset", label = "Camera side offset", kind = "value", needs = "none", default = 0, min = -1.5, max = 1.5, step = 0.05,
+      fmt = function(v) return v == 0 and "game's own" or string.format("%+.2f m", v) end,
+      help = "Moves the on-foot camera sideways, over your shoulder (right is +). Shows from the next camera change: start or stop running." },
+    { id = "camera_height", label = "Camera height", kind = "value", needs = "none", default = 0, min = -1.0, max = 1.0, step = 0.05,
+      fmt = function(v) return v == 0 and "game's own" or string.format("%+.2f m", v) end,
+      help = "Raises or lowers the on-foot camera." },
+    { id = "bloom", label = "Bloom", kind = "value", needs = "none", default = 1.0, min = 0, max = 2.0, step = 0.1,
+      fmt = function(v) return v == 0 and "off" or string.format("x%.1f", v) end,
+      help = "The glow round bright light: 0 is off, x1 the game's own, x2 twice as strong." },
     { id = "map_arrow", label = "Map arrow shows where you face", kind = "toggle", needs = "none", v = S("map_arrow_follows_player", false),
       help = "On the turning minimap and the pause map, the arrow points the way you face, not the camera.",
       update = function() map_cells(); apply("map_arrow", MAP, true) end,
@@ -361,6 +499,12 @@ end
 
 -- Every frame, after the rows: the camera cells and the start-up load.
 function Q.after_update(p)
+  -- Aiming, turn speed, bloom and the shoulder camera.
+  aim_zoom_frame()
+  aim_spread_frame(p)
+  turn_frame()
+  bloom_frame()
+  shoulder_frame()
   -- Driving camera hold.
   if hold_wanted() then camera_hold(); apply("autocenter", AUTOCENTER, true) else apply("autocenter", AUTOCENTER, false) end
   -- Field of view (the multiplier and the speed widening together): through

@@ -103,9 +103,24 @@ return function(F, G)
     walk.open = function(_, p) return native_walk.page(p, previews) end
   end
 
+  -- customization_item_wear and customization_outfit_wear switch off the
+  -- stores' and the crib wardrobe's triggers (the game's trigger-type mask,
+  -- 0x02223CB8: bit 4 crib clothing, 21-26 creation, surgeon, salon, tattoo,
+  -- clothing and jewelry store) until customization_item_revert, as for a
+  -- mission outfit. The ones that were on before are switched back on; ones a
+  -- mission switched off stay off.
+  local TRIGGER_MASK = 0x02223CB8
+  local STORE_TRIGGERS = { [4] = "crib clothing", [21] = "player creation", [22] = "plastic surgeon", [23] = "hair salon",
+    [24] = "tattoo parlor", [25] = "clothing store", [26] = "jewelry store" }
   local function apply(p, command, ...)
     if G.player() ~= p or not G.playing(p) then return "Can't change clothes right now" end
+    local before = wml.read_u32(TRIGGER_MASK)
     local _, applied = G.lua(command .. " tweak_out(true)", ...)
+    local now = wml.read_u32(TRIGGER_MASK)
+    for bit, name in pairs(STORE_TRIGGERS) do
+      local b = 1 << bit
+      if before & b == 0 and now & b ~= 0 then G.lua("trigger_type_enable(%s, true)", name) end
+    end
     if not applied then return "Couldn't apply the change" end
   end
 

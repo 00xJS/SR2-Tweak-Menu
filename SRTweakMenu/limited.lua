@@ -17,8 +17,8 @@
 -- There are no trunks, caches or prompts: a big gun that is taken goes to
 -- a stash the menu keeps in saved_presets.lua (names only, so it outlasts
 -- the game closing, but is shared by every save), and Swap big gun hands
--- the oldest one back. Its ammo is not kept. The cash safe
--- is left out: the scripts can add and remove cash but not read it.
+-- the oldest one back. Its ammo is not kept. The cash safe is
+-- Player > Cash safe (cash_safe.lua).
 
 local presets = require("presets")
 local L = {}

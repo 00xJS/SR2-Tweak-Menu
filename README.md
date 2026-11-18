@@ -9,9 +9,9 @@ the game's mission-script functions, its phone cheats and its engine. The
 menu can be drawn as plain text or in the game's own look (its menu art,
 fonts and sounds).
 
-**Status: preview (0.5.0).** Every row passes the offline test, but most
+**Status: preview (0.6.0).** Every row passes the offline test, but most
 haven't been played in the game yet, so expect rough edges. Everything new in
-0.4 and 0.5 is untested in game (see `SRTweakMenu/CHANGELOG.md`). Settings >
+0.4 to 0.6 is untested in game (see `SRTweakMenu/CHANGELOG.md`). Settings >
 Run self-test checks what it can in your game and writes a report. `TESTING.md` is the checklist for playing it through. Some SR1
 rows have no SR2 version (see the end). Bug reports are welcome in Issues.
 
@@ -70,13 +70,13 @@ Settings are in `TweakMenu\SRTweakMenu\mod.ini`. The log is
 
 | Tab | |
 |---|---|
-| Player | **Health & damage** (god mode, no ragdoll, health multiplier, fall damage, no health regen, refill health, kill yourself), **Movement** (No Clip, sprint, run boost, high jump, jump height, soft landing, crouch while moving, swim speed), **Notoriety** (never wanted, no cops, no gangs, never busted, max notoriety, each team's level, join a gang, persistent gang dots), **Bodyguards** (spawn, recruit the nearest gang member, dismiss, their weapon), **Unlocks** (music, collectibles, clothing, rewards), **Items** (food and drugs, experimental); +$50,000, +5,000 respect |
-| Customize | Face & Body (the plastic surgeon's sliders), Hair, Clothing, Jewelry, Tattoos, Mission Outfits, voice; **Saved Looks** (8 slots); restore outfit, customization pose; **Movement** (walk, run and stand style, keep walk style) |
+| Player | **Health & damage** (god mode, no ragdoll, health multiplier, fall damage, no health regen, refill health, kill yourself), **Movement** (No Clip, sprint, run boost, high jump, jump height, soft landing, crouch while moving, swim speed), **Notoriety** (never wanted, no cops, no gangs, never busted, max notoriety, each team's level, join a gang, persistent gang dots), **Bodyguards** (spawn, recruit the nearest gang member, dismiss, their weapon), **Unlocks** (music, collectibles, clothing, rewards), **Items** (food and drugs, experimental), **Cash safe** (deposit, withdraw, Limited Cash); +$50,000, +5,000 respect |
+| Customize | Face & Body (the plastic surgeon's sliders), Hair, Clothing, Jewelry, Tattoos, Mission Outfits, voice; **Saved Looks** (8 slots, clothing included); restore outfit, customization pose; **Movement** (walk, run and stand style, keep walk style) |
 | Models | Play as any character, live; restore your character |
-| Weapons | Infinite ammo, no reload, rapid fire, one-hit kill, heavy knockback, perfect aim, no melee lock-on, reload in cars; **Limited Weapons** (one big gun at a time, a stash, swap); **Special ammo** (rocket ammo, fire ammo, money gun, explosive melee); give any weapon, give every weapon, give item, remove weapon, refill all ammo |
+| Weapons | Infinite ammo, no reload, rapid fire, one-hit kill, heavy knockback, perfect aim, no melee lock-on, reload in cars; **Aiming** (Fine Aim zoom, spread and turn speed); **Limited Weapons** (one big gun at a time, a stash, swap); **Special ammo** (rocket ammo, fire ammo, money gun, explosive melee); give any weapon, give every weapon, give item, remove weapon, refill all ammo |
 | Vehicles | Vehicle god mode, repair; **Toughness** (tank mode, bulletproof glass and tires, no explosion fling, Locked Cars), **Handling** (extra grip, nitrous everywhere, top speed, bouncy and less stiff cars), **Look** (customize the car in the menu, **Vehicle Presets** (4 slots per model), paint from all 548 of the game's colours), **Driving camera**; spawn any of 118 vehicles, remove spawned vehicles, garage, destroy |
 | World | Weather, no fog, time of day, freeze time, clear / restore streets; **People** (spawn anyone, crowds, everybody dance / pose, ragdoll all, kill everyone, gangs without guns), **Drops** (cash, money rain, weapons, cash drop chance), **Districts** (hand any district to a gang, reveal the map) |
-| Visual | Hide HUD, map arrow, letterbox, filter, render mode, saturation; **HUD Style** (SR22, Default+, GTA x Saints Row, E3 2005, with matching weapon wheels); **Camera** (field of view, first-person view, turn speed), **Free camera** (fly it or hold the shot, freeze world) |
+| Visual | Hide HUD, map arrow, letterbox, filter, render mode, saturation, bloom; **HUD Style** (SR22, Default+, GTA x Saints Row, E3 2005, with matching weapon wheels); **Camera** (field of view, first-person view, turn speed, side offset, height), **Free camera** (fly it or hold the shot, freeze world) |
 | Teleport | Districts, cribs, crib garages, every store chain, mission starts, strongholds; teleport to waypoint |
 | Emotes | **Poses**, **Actions** (taunts, gang signs, dances), **Voice Lines**, stage a scene, stop, repeat |
 | Settings | All tweaks, show active tweaks, save / forget tweaks, Menu UI (text or game look), **Run self-test**, **Export / Import settings**, **Hotkeys**; **Game & saving** (skip intro, load last save, quick save, pause cutscenes, no tutorial popups) |
@@ -90,7 +90,7 @@ unlocks it on your phone and marks the save as cheated, as the phone does.
 
 **Kept in your game folder, not in the repo:** saved tweaks
 (`saved_tweaks.txt`), saved looks, vehicle presets, favorites, hotkeys, the
-kept walk and the weapon stash (`saved_presets.lua`), the export
+kept walk, the weapon stash and the cash safe (`saved_presets.lua`), the export
 (`TweakMenu\SRTweakMenu-backup.lua`) and the self-test report
 (`TweakMenu\selftest_report.txt`).
 
@@ -173,16 +173,16 @@ Juiced Patch's sources were used as a map. No Juiced code is used.
 ## Not on Saints Row 2
 
 - **SR1's own:** the SR1 gangs' notoriety and "Saints are enemies" (SR2 has
-  its own gangs' rows), SR1's aiming add-ons (Precise Aim, Fine Aim, Weapon
-  Switch), weapon skins (SR1's texture work), and Heal on D-pad down and
+  its own gangs' rows), SR1's Precise Aim and Weapon Switch, weapon skins
+  (SR1's texture work), and Heal on D-pad down and
   D-pad taunts (SR2 has its own healing and taunt buttons).
 - **No SR2 way:** quick crouch (the crouch is an animation with no speed
   value), brake lights when stopped (the brake is also reverse), multiplayer
   clothing, and stores open 24/7 (SR2's stores don't close).
 - **Partly:** Unlock all collectibles gives what the 60 CDs unlock, not the
-  CDs themselves; the money gun throws bills the way you aim; Saved Looks
-  keep no clothing; Limited Weapons and Locked Cars are simpler than SR1's
-  (no trunks or caches; a locked car is only the one you're in).
+  CDs themselves; the money gun throws bills the way you aim; Limited
+  Weapons, Limited Cash and Locked Cars are simpler than SR1's (no trunks,
+  safe screen or break-ins; a locked car is only the one you're in).
 - **Parked:** the SR1 walk and prone kick import (it overflowed the game's
   animation table), and player-only voice pitch.
 

@@ -18,6 +18,9 @@ local morphs = { ["global gender/body gender"] = 0.2, ["global body/body fat"] =
 local skin, voice, listed = 2, 1, {}
 local hair = { [0] = { 4, 1, 2 }, { -2, -1, -1 }, { 3, 5, 5 }, { -2, -1, -1 }, { 1, 0, 0 } }
 local buffers = {}
+-- What each customization slot wears: { item, variant, colours, c0, c1, c2, wear, logo, logo colour }.
+local worn = { [8] = { 3, 1, 2, 4, 5, -1, 0, -1, -1 }, [14] = { 7, 0, 0, -1, -1, -1, 1, -1, -1 }, [50] = { 9, 0, 0, -1, -1, -1, 0, -1, -1 } }
+local ITEM_NAMES = { [3] = "coat_leather", [7] = "shoes_sneaker", [9] = "tattoo_tribal", [11] = "coat_leather" }
 
 -- The car: two part slots and a paint slot; fitted[slot address] = component.
 local P, CAR, INFO, INST, CAT, ARR, POOL = 0x10000000, 0x20000000, 0x21000000, 0x22000000, 0x23000000, 0x23001000, 0x30000000
@@ -38,6 +41,9 @@ local function car(bumpers)
   wr(CAR + 0x84D4, 4, INST); wr(CAR + 0x84E4, 4, INFO)
   wr(INFO + 0x7C, 1, 1); wr(INFO + 0x78, 4, CAT); wr(CAT, 4, 3); wr(CAT + 4, 4, ARR)
   wr(0x0252A084, 4, POOL)
+  -- the item table: 12 items, item i's name at 0x50000000 + i * 0x100
+  wr(0x025288D8, 4, 12)
+  for i = 0, 11 do wr(0x029E8CD0 + i * 0x78 + 8, 4, 0x50000000 + i * 0x100) end
   return { slot(0, "Front Bumper", 0x25000000, bumpers, 0), slot(1, "Spoiler", 0x26000000, 2, 0),
     slot(2, "Body Color1", 0x27000000, 1, 1) }
 end
@@ -70,8 +76,35 @@ wml = {
     end
     return 0
   end,
+  read_string = function(a) return ITEM_NAMES[(a - 0x50000000) // 0x100] or "" end,
   vint = function(code)
     if code:find("pcu_is_streaming_done", 1, true) then return true, true end
+    if code:find("for s = 6, 72 do", 1, true) then
+      local out = {}
+      for s = 6, 72 do
+        local w = worn[s]
+        if w then out[#out + 1] = string.format("%d,%d,%d,%d,%d,%d,%d,%d,%d,%d", s, w[1], w[2], w[3], w[4], w[5], w[6], w[7], w[8], w[9]) end
+      end
+      return true, #out, table.concat(out, ";")
+    end
+    if code:find("pcu_remove_clothing()", 1, true) then
+      for s in pairs(worn) do if s < 44 then worn[s] = nil end end
+      return true, true
+    end
+    local q = code:match("^tweak_out%(pcu_get_slot_info%((%d+)%)%)$")
+    if q then
+      local w = worn[tonumber(q)]
+      if not w then return true, -1 end
+      return true, tonumber(q), w[1]
+    end
+    local args = code:match("^pcu_set_slot_info%(([^)]*)%)")
+    if args then
+      local t = {}
+      for v in args:gmatch("[^,%s]+") do t[#t + 1] = v end
+      local function n(v) return v == "nil" and -1 or tonumber(v) end
+      worn[tonumber(t[1])] = { n(t[2]), n(t[3]), n(t[4]), n(t[5]), n(t[6]), n(t[7]), n(t[8]), n(t[9]), n(t[10]) }
+      return true, true
+    end
     if code:find("pcr_report_anims", 1, true) then return true, 2 end
     if code:find("tweak_out(list[i][1], list[i][2], list[i][3])", 1, true) then return true, "Plain", 0, false, "Swagger", 1, false end
     local walk = code:match('^pcr_set_anim%("walk_style", (%d+)%)$')
@@ -126,6 +159,7 @@ assert(page.rows[1].options[1]:find("saved"))
 -- Change everything, then load the slot.
 for key in pairs(morphs) do morphs[key] = 0.9 end
 skin, voice, hair[0], hair[2] = 0, 3, { 9, 9, 9 }, { -2, -1, -1 }
+worn[8], worn[14], worn[20] = { 5, 0, 0, -1, -1, -1, 0, -1, -1 }, nil, { 2, 0, 0, -1, -1, -1, 0, -1, -1 }
 assert(row(page, "Save to this slot").run():find("Press again"))   -- a filled slot asks first
 page.rows[1].v = 2; page.rows[1].change()
 page.rows[1].v = 1; page.rows[1].change()
@@ -135,6 +169,17 @@ assert(looks.status() == "DONE", looks.status())
 assert(math.abs(morphs["global gender/body gender"] - 0.2) < 0.001 and math.abs(morphs["nose/nose depth"] - 0.7) < 0.001
   and math.abs(morphs["jaw/7"] - 0.5) < 0.001 and math.abs(morphs["global body/old"] - 0.1) < 0.001)
 assert(skin == 2 and voice == 1 and hair[0][1] == 4 and hair[0][2] == 1 and hair[2][1] == 3)
+-- The clothes came back, with the coat's colours; the chain put on since is gone.
+assert(worn[8] and worn[8][1] == 3 and worn[8][3] == 2 and worn[8][4] == 4 and worn[8][5] == 5 and worn[8][6] == -1, "coat")
+assert(worn[14] and worn[14][1] == 7 and worn[14][7] == 1, "shoes and their wear option")
+assert(worn[20] == nil and worn[50] and worn[50][1] == 9, "chain off, tattoo kept")
+-- An item moved in the table (a mod) is found again by its name.
+ITEM_NAMES[3] = "something_else"
+worn[8] = nil
+row(page, "Load this slot").run()
+for _ = 1, 50 do looks.update(P) end
+assert(worn[8] and worn[8][1] == 11, "coat found again by name at index 11")
+ITEM_NAMES[3] = "coat_leather"
 -- A fresh start reads the same look from the file.
 looks = reload()
 morphs["nose/bridge width"] = 0

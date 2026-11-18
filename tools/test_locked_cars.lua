@@ -64,11 +64,16 @@ row.update(nil, P, true, row)
 assert(said() == "car_a+" and locked.car_a)
 row.update(nil, P, true, row)
 assert(said() == "car_a+" and locked.car_a)
--- Stepping out leaves it locked.
+-- Stepping out unlocks it (the lock keeps the player out too), once.
 sit("")
 row.update(nil, P, true, row)
-assert(said() == "" and locked.car_a)
--- Another car: the first is let go, the new one locked.
+assert(said() == "car_a-" and not locked.car_a)
+row.update(nil, P, true, row)
+assert(said() == "")
+-- Another car straight from this one: the first is let go, the new one locked.
+sit("car_a")
+row.update(nil, P, true, row)
+said()
 sit("car_b")
 row.update(nil, P, true, row)
 assert(said() == "car_a- car_b+" and not locked.car_a and locked.car_b)

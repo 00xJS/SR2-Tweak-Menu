@@ -1,3 +1,20 @@
+# 0.6.0
+
+New, built from reading the game's code. None of it has been played yet.
+
+- **Saved Looks keep your clothing**, jewelry and tattoos: each item with its variant, colours, wear option and logo. Loading takes off what you wear and puts the saved items on, one at a time. Items your body can't wear are skipped. Tattoos you've added since are left on. Looks saved before this keep what you wear.
+- **Weapons > Aiming & switching**: Fine Aim zoom (how close the aim camera comes), Fine Aim spread (how much your shots spread while aiming) and Fine Aim turn speed (mouse and stick, while aiming).
+- **Visual > Bloom**: the glow round bright light, from off to twice the game's own.
+- **Visual > Camera**: Camera side offset (over the shoulder) and Camera height, for the on-foot camera.
+- **Player > Cash safe**: deposit and withdraw cash. With **Limited Cash** on, the safe only opens at the cash pickup of a crib you own, and the cash you carry is lost when you die. Getting busted isn't caught yet. The safe is shared by every save.
+
+Fixed
+
+- Wearing something from Customize > Clothing or Mission Outfits no longer closes the clothing stores, the barber, the tattoo parlor, the plastic surgeon and the crib wardrobe until Restore outfit. The game's wear call shut them, as it does for a mission outfit.
+- Locked Cars locks your car only while you're in it. The lock the game has also keeps you out, so once you got out you couldn't get back into your own car.
+- Field of view, the driving camera's hold, mouse turn speed and the map arrow no longer go wrong for a frame when the Customize pose, hair or face code runs. They shared a scratch buffer with it.
+- The menu's code patches are only put on over the game code they were made for. With another mod (Juiced Patch) changing the same place, that row now does nothing and says so in the log, instead of writing over the other mod's code.
+
 # 0.5.0
 
 New. None of it has been played in the game yet.

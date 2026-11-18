@@ -1,6 +1,6 @@
-# Testing SR Tweak Menu 0.5.0 in Saints Row 2
+# Testing SR Tweak Menu 0.6.0 in Saints Row 2
 
-Almost nothing in 0.4 and 0.5 has been played yet. Every row passes the
+Almost nothing in 0.4 to 0.6 has been played yet. Every row passes the
 offline test, which runs the menu against a fake game. This list is what only
 the real game can tell us. Tick what works, and for anything that doesn't,
 send the three things under "What to send back".
@@ -103,7 +103,44 @@ You don't have to do it all in one go. Sections 1 and 2 matter most.
   Camera shortcut is on by default): fly, open the menu, type in it. The car or character doesn't
   move while you do.
 
-## 4. MJQ's 0.4 work, never confirmed in game
+## 4. New in 0.6.0
+
+**Saved Looks with clothing**
+- [ ] Save a look wearing a coat, shoes and a chain. Change all three (and
+  take one off), load the slot: the same items come back, colours too.
+- [ ] A look saved as a man, loaded as a woman: items that don't fit are
+  skipped; nothing breaks.
+
+**Customize clothing and the stores** (fixed)
+- [ ] Wear something from Customize > Clothing, then walk into a clothing
+  store, the barber and your crib's wardrobe: they all open.
+
+**Aiming**
+- [ ] Weapons > Aiming & switching > Fine Aim zoom at x0.5: aim a gun; the
+  camera comes in closer than before. Back to x1: normal.
+- [ ] Fine Aim spread at x0: shots while aiming go dead on.
+- [ ] Fine Aim turn speed at x0.3: the mouse and stick turn slower while
+  aiming only.
+
+**Bloom and camera**
+- [ ] Visual > Bloom at 0 (off) and x2 at night by street lights: the glow
+  goes and comes back stronger.
+- [ ] Visual > Camera > Camera side offset +0.5, then start running: the
+  camera sits over your right shoulder. Camera height moves it up and down.
+
+**Cash safe**
+- [ ] Player > Cash safe: Deposit $10,000, then Withdraw: your cash goes
+  down and comes back (the safe's amount shows on Deposit).
+- [ ] Limited Cash on: away from a crib it says to use a crib. At your crib's
+  cash pickup it works.
+- [ ] Limited Cash on, carrying cash: die. After you respawn you have no
+  cash; the safe still has its money.
+
+**Locked Cars** (changed)
+- [ ] On, in a car: gang members and police can't pull you out. Get out, then
+  get back in: you can.
+
+## 5. MJQ's 0.4 work, never confirmed in game
 
 **Customize**
 - [ ] Face & Body: the sliders move your face live, with the plastic surgeon's
@@ -150,14 +187,16 @@ You don't have to do it all in one go. Sections 1 and 2 matter most.
 - [ ] Teleport categories open their own pages; teleports land you there.
 - [ ] Quick Camera: both stick clicks open the camera page and start it.
 
-## 5. Things we already know are missing
+## 6. Things we already know are missing
 
-No need to report these. Clothing in Saved Looks, aim mods (Precise Aim,
-Fine Aim), bloom, weapon skins, player-only voice pitch, the SR1 walk and
-kick import, and SR1's full Limited Weapons and Locked Cars (with trunks and
-break-ins) aren't built yet.
+No need to report these. Precise Aim, weapon skins, player-only voice pitch,
+the SR1 walk and kick import, getting busted under Limited Cash, and SR1's
+full Limited Weapons and Locked Cars (trunks, the safe screen, break-ins)
+aren't built yet.
 
-## 6. Juiced on
+## 7. Juiced on
 
 - [ ] Switch Juiced on and repeat sections 1 and 2. Note anything that
   differs from Juiced off.
+- [ ] Look in `wml.log` for lines saying "isn't what the menu expects
+  (another mod?)": they name rows that stand aside for Juiced.
